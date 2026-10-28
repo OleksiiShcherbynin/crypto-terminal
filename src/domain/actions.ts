@@ -10,3 +10,4 @@ export const orderFilled = createAction<Fill>('orders/filled');
 export const orderRejected = createAction<{ request: OrderRequest; reason: string }>(
   'orders/rejected',
 );
+export const orderCancelRequested = createAction<string>('orders/cancelRequested');

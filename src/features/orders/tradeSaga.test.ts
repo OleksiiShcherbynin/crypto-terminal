@@ -1,8 +1,15 @@
 import { expectSaga } from 'redux-saga-test-plan';
 import { describe, expect, it } from 'vitest';
 import { rootReducer } from '../../app/store';
-import { orderFilled, orderPlaced, orderRejected, orderRequested } from '../../domain/actions';
-import { fakeDeps, t } from '../../test/fixtures';
+import {
+  orderCancelRequested,
+  orderCancelled,
+  orderFilled,
+  orderPlaced,
+  orderRejected,
+  orderRequested,
+} from '../../domain/actions';
+import { fakeDeps, fill, order, t } from '../../test/fixtures';
 import { connectionStatusChanged } from '../market/connectionSlice';
 import { tickersUpdated } from '../market/tickersSlice';
 import { tradeSaga } from './tradeSaga';
@@ -87,5 +94,40 @@ describe('tradeSaga', () => {
       .put(orderRejected({ request, reason: 'Unknown pair' }))
       .dispatch(orderRequested(request))
       .silentRun(50);
+  });
+
+  describe('cancel requests', () => {
+    const a = order({ id: 'a', price: 90, quantity: 0.1 });
+    const b = order({ id: 'b', price: 80, quantity: 0.1 });
+
+    it('cancels an open limit buy and releases its reservation', async () => {
+      const state = rootReducer(stateWith(), orderPlaced(a));
+      expect(state.portfolio.reservedQuote).toBe(9);
+      const result = await expectSaga(tradeSaga, fakeDeps())
+        .withReducer(rootReducer, state)
+        .put(orderCancelled(a))
+        .dispatch(orderCancelRequested('a'))
+        .silentRun(50);
+      expect(result.storeState.portfolio.reservedQuote).toBe(0);
+      expect(result.storeState.orders.items).toHaveLength(0);
+    });
+
+    it('ignores a stale cancel for an already filled order', async () => {
+      let state = rootReducer(stateWith(), orderPlaced(a));
+      state = rootReducer(state, orderPlaced(b));
+      state = rootReducer(
+        state,
+        orderFilled(fill({ id: 'f', orderId: 'a', price: 90, quantity: 0.1 })),
+      );
+      const reserved = state.portfolio.reservedQuote;
+      expect(reserved).toBe(8);
+      const result = await expectSaga(tradeSaga, fakeDeps())
+        .withReducer(rootReducer, state)
+        .not.put(orderCancelled(a))
+        .dispatch(orderCancelRequested('a'))
+        .silentRun(50);
+      expect(result.storeState.portfolio.reservedQuote).toBe(reserved);
+      expect(result.storeState.orders.items.map((o: { id: string }) => o.id)).toEqual(['b']);
+    });
   });
 });

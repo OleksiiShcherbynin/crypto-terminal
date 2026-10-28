@@ -89,6 +89,26 @@ describe('orderWatcherSaga', () => {
     expect(result.storeState.orders.items).toHaveLength(0);
   });
 
+  it('fills two orders that cross on the same tick', async () => {
+    const result = await expectSaga(orderWatcherSaga, fakeDeps())
+      .withReducer(rootReducer, initial())
+      .dispatch(orderPlaced(order({ id: 'a', price: 90 })))
+      .dispatch(orderPlaced(order({ id: 'b', price: 95 })))
+      .dispatch(tickersUpdated([t('BTCUSDT', 85)]))
+      .silentRun(50);
+    expect(fillCount(result)).toBe(2);
+  });
+
+  it('fills an order once when several crossing ticks arrive', async () => {
+    const result = await expectSaga(orderWatcherSaga, fakeDeps())
+      .withReducer(rootReducer, initial())
+      .dispatch(orderPlaced(buy90()))
+      .dispatch(tickersUpdated([t('BTCUSDT', 85)]))
+      .dispatch(tickersUpdated([t('BTCUSDT', 80)]))
+      .silentRun(50);
+    expect(fillCount(result)).toBe(1);
+  });
+
   it('re-spawns watchers for restored orders on start', async () => {
     const start = initial();
     const restored = {
