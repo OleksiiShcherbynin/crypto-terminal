@@ -6,10 +6,12 @@ import {
   type ISeriesApi,
   type UTCTimestamp,
 } from 'lightweight-charts';
-import type { Candle } from '../../../domain/types';
+import type { Candle, Interval } from '../../../domain/types';
 import type { CandlesState } from '../candlesSlice';
 
 export interface CandleChartProps {
+  symbol: string;
+  interval: Interval;
   candles: Candle[];
   status: CandlesState['status'];
   pricePrecision?: number;
@@ -40,11 +42,22 @@ const toBar = (c: Candle) => ({
   close: c.close,
 });
 
-export function CandleChart({ candles, status, pricePrecision = 2 }: CandleChartProps) {
+export function CandleChart({
+  symbol,
+  interval,
+  candles,
+  status,
+  pricePrecision = 2,
+}: CandleChartProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   const chartRef = useRef<IChartApi | null>(null);
   const seriesRef = useRef<ISeriesApi<'Candlestick'> | null>(null);
-  const pushedRef = useRef<{ first: number; length: number } | null>(null);
+  const pushedRef = useRef<{
+    symbol: string;
+    interval: Interval;
+    first: number;
+    length: number;
+  } | null>(null);
   const precisionRef = useRef(pricePrecision);
 
   useEffect(() => {
@@ -92,11 +105,18 @@ export function CandleChart({ candles, status, pricePrecision = 2 }: CandleChart
 
   useEffect(() => {
     const series = seriesRef.current;
-    if (!series || candles.length === 0) return;
+    if (!series) return;
     const prev = pushedRef.current;
+    if (candles.length === 0) {
+      if (prev) series.setData([]);
+      pushedRef.current = null;
+      return;
+    }
     const first = candles[0].time;
     const replaced =
       !prev ||
+      prev.symbol !== symbol ||
+      prev.interval !== interval ||
       prev.first !== first ||
       candles.length < prev.length ||
       candles.length > prev.length + 1;
@@ -106,8 +126,8 @@ export function CandleChart({ candles, status, pricePrecision = 2 }: CandleChart
     } else {
       series.update(toBar(candles[candles.length - 1]));
     }
-    pushedRef.current = { first, length: candles.length };
-  }, [candles]);
+    pushedRef.current = { symbol, interval, first, length: candles.length };
+  }, [candles, symbol, interval]);
 
   return (
     <div className="relative h-full min-h-60 w-full">

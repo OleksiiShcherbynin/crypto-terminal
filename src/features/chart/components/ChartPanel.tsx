@@ -9,7 +9,7 @@ import { IntervalPicker } from './IntervalPicker';
 export function ChartPanel() {
   const { symbol } = useAppSelector(selectSelection);
   const ticker = useAppSelector(selectTicker(symbol));
-  const { candles, status } = useAppSelector((s) => s.candles);
+  const { candles, status, symbol: candleSymbol, interval } = useAppSelector((s) => s.candles);
   const pair = findPair(symbol);
   const precision = pair?.pricePrecision ?? 2;
   const change = ticker?.changePct ?? 0;
@@ -33,7 +33,13 @@ export function ChartPanel() {
           ) : null}
         </div>
         <div className="min-h-0 flex-1">
-          <CandleChart candles={candles} status={status} pricePrecision={precision} />
+          <CandleChart
+            symbol={candleSymbol}
+            interval={interval}
+            candles={candles}
+            status={status}
+            pricePrecision={precision}
+          />
         </div>
       </div>
     </Panel>
