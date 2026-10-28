@@ -17,6 +17,7 @@ function App() {
     <div className="flex min-h-full flex-col xl:h-full">
       <EquityHeader />
       <ExternalChangeBanner />
+      {/* The 240px bottom row is mirrored by ToastStack's xl:bottom offset; change both together. */}
       <main className="grid min-h-0 flex-1 grid-cols-1 xl:grid-cols-[280px_1fr_320px] xl:grid-rows-[minmax(0,1fr)_240px]">
         <section
           aria-label="Market"
@@ -34,7 +35,7 @@ function App() {
         </section>
         <section
           aria-label="Trade"
-          className="border-b border-line bg-panel xl:border-b-0 xl:border-l"
+          className="border-b border-line bg-panel xl:min-h-0 xl:overflow-y-auto xl:border-b-0 xl:border-l"
         >
           <Panel title="Trade">
             <TradeForm />

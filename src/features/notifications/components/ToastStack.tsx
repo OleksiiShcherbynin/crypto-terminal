@@ -17,8 +17,9 @@ export function ToastStack() {
   const dispatch = useDispatch();
   if (toasts.length === 0) return null;
 
+  // On xl the stack sits above the 240px bottom panel (see App.tsx) so it never covers P&L.
   return (
-    <div className="pointer-events-none fixed right-3 bottom-3 z-50 flex w-[360px] max-w-[calc(100vw-1.5rem)] flex-col gap-2">
+    <div className="pointer-events-none fixed right-3 bottom-3 z-50 xl:bottom-[252px] flex w-[360px] max-w-[calc(100vw-1.5rem)] flex-col gap-2">
       {toasts.map((toast) => (
         <div
           key={toast.id}

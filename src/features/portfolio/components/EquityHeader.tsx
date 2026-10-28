@@ -9,10 +9,10 @@ export function EquityHeader() {
   const realized = useSelector(selectRealizedPnl);
 
   return (
-    <header className="flex h-9 shrink-0 items-center gap-6 border-b border-line bg-panel px-3">
+    <header className="flex min-h-9 shrink-0 flex-wrap items-center gap-x-6 gap-y-1 border-b border-line bg-panel px-3 py-1">
       <div className="flex items-baseline gap-3">
         <h1 className="text-sm font-semibold tracking-tight">Crypto Terminal</h1>
-        <span className="text-xs text-muted">Paper trading</span>
+        <span className="hidden text-xs text-muted sm:inline">Paper trading</span>
       </div>
       <dl className="ml-auto flex items-baseline gap-6 text-xs">
         <div className="flex items-baseline gap-2">
