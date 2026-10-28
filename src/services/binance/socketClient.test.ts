@@ -64,6 +64,34 @@ describe('socketClient', () => {
     expect(FakeWebSocket.instances[0].sent).toEqual([]);
   });
 
+  it('subscribes on open to streams added while connecting', () => {
+    client.open('h');
+    client.subscribe(['btcusdt@kline_1m']);
+    const ws = FakeWebSocket.instances[0];
+    ws.emitOpen();
+    expect(ws.sent.map((s) => JSON.parse(s))).toEqual([
+      { method: 'SUBSCRIBE', params: ['btcusdt@kline_1m'], id: 1 },
+    ]);
+  });
+
+  it('unsubscribes on open from streams removed while connecting', () => {
+    client.subscribe(['a@miniTicker']);
+    client.open('h');
+    client.unsubscribe(['a@miniTicker']);
+    const ws = FakeWebSocket.instances[0];
+    ws.emitOpen();
+    expect(ws.sent.map((s) => JSON.parse(s))).toEqual([
+      { method: 'UNSUBSCRIBE', params: ['a@miniTicker'], id: 1 },
+    ]);
+  });
+
+  it('sends nothing on open when nothing changed', () => {
+    client.subscribe(['a@miniTicker']);
+    client.open('h');
+    FakeWebSocket.instances[0].emitOpen();
+    expect(FakeWebSocket.instances[0].sent).toEqual([]);
+  });
+
   it('forwards open, parsed messages, errors and close to listeners', () => {
     client.open('h');
     const ws = FakeWebSocket.instances[0];

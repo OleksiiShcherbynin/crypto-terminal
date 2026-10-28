@@ -55,11 +55,22 @@ export function createSocketClient(
     streams,
     open(host) {
       detach();
-      const ws = new WebSocketImpl(`wss://${host}/stream?streams=${[...streams].join('/')}`);
+      const inUrl = new Set(streams);
+      const ws = new WebSocketImpl(`wss://${host}/stream?streams=${[...inUrl].join('/')}`);
       socket = ws;
       // Handlers check identity so a replaced/closed socket can never reach listeners.
       ws.onopen = () => {
-        if (socket === ws) emit({ type: 'open' });
+        if (socket !== ws) return;
+        // Reconcile changes made while the socket was still connecting.
+        send(
+          'SUBSCRIBE',
+          [...streams].filter((s) => !inUrl.has(s)),
+        );
+        send(
+          'UNSUBSCRIBE',
+          [...inUrl].filter((s) => !streams.has(s)),
+        );
+        emit({ type: 'open' });
       };
       ws.onmessage = (m: MessageEvent) => {
         if (socket !== ws) return;
