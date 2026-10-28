@@ -22,6 +22,11 @@ export function roundTo(value: number, dp: number): number {
   return Number(new Big(value).round(dp));
 }
 
+/** Rounds toward zero (never up) to `dp` decimal places. */
+export function floorTo(value: number, dp: number): number {
+  return Number(new Big(value).round(dp, Big.roundDown));
+}
+
 export function isZero(value: number): boolean {
   return Math.abs(value) < 1e-8;
 }
