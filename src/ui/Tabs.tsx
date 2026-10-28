@@ -1,3 +1,5 @@
+import { useRef, type KeyboardEvent } from 'react';
+
 export interface TabItem {
   id: string;
   label: string;
@@ -12,8 +14,26 @@ export interface TabsProps {
 }
 
 export function Tabs({ tabs, active, onChange, idPrefix = 'tab' }: TabsProps) {
+  const refs = useRef<Record<string, HTMLButtonElement | null>>({});
+
+  function onKeyDown(e: KeyboardEvent<HTMLDivElement>) {
+    const i = tabs.findIndex((t) => t.id === active);
+    if (i < 0 || tabs.length === 0) return;
+    let next: number;
+    if (e.key === 'ArrowRight') next = (i + 1) % tabs.length;
+    else if (e.key === 'ArrowLeft') next = (i - 1 + tabs.length) % tabs.length;
+    else if (e.key === 'Home') next = 0;
+    else if (e.key === 'End') next = tabs.length - 1;
+    else return;
+    e.preventDefault();
+    const target = tabs[next];
+    if (!target) return;
+    refs.current[target.id]?.focus();
+    onChange(target.id);
+  }
+
   return (
-    <div role="tablist" className="flex h-8 items-stretch gap-4 px-3">
+    <div role="tablist" onKeyDown={onKeyDown} className="flex h-8 items-stretch gap-4 px-3">
       {tabs.map((t) => {
         const selected = t.id === active;
         return (
@@ -21,6 +41,9 @@ export function Tabs({ tabs, active, onChange, idPrefix = 'tab' }: TabsProps) {
             key={t.id}
             type="button"
             role="tab"
+            ref={(el) => {
+              refs.current[t.id] = el;
+            }}
             id={`${idPrefix}-${t.id}`}
             aria-selected={selected}
             aria-controls={`${idPrefix}-panel`}
