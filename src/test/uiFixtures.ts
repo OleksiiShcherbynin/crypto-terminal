@@ -22,3 +22,10 @@ export function chartState(
     candles: { symbol: 'BTCUSDT', interval: '1m', status, candles },
   };
 }
+
+export function tradeState(status: ConnectionStatus = 'live'): Partial<RootState> {
+  return {
+    connection: { status, attempt: 0 },
+    tickers: { BTCUSDT: t('BTCUSDT', 100) },
+  };
+}

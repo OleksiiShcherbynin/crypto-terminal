@@ -1,12 +1,9 @@
 import { BottomPanel } from './app/components/BottomPanel';
 import { ChartPanel } from './features/chart/components/ChartPanel';
+import { TradeForm } from './features/orders/components/TradeForm';
 import { ConnectionStatus } from './features/market/components/ConnectionStatus';
 import { MarketList } from './features/market/components/MarketList';
 import { Panel } from './ui/Panel';
-
-function Placeholder({ children }: { children: string }) {
-  return <p className="px-3 py-3 text-muted">{children}</p>;
-}
 
 function App() {
   return (
@@ -32,7 +29,7 @@ function App() {
           className="border-b border-line bg-panel xl:border-b-0 xl:border-l"
         >
           <Panel title="Trade">
-            <Placeholder>Order form loads here</Placeholder>
+            <TradeForm />
           </Panel>
         </section>
         <BottomPanel status={<ConnectionStatus />} />

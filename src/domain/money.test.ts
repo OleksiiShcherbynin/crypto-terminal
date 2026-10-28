@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { add, sub, mul, div, roundTo, isZero } from './money';
+import { add, sub, mul, div, roundTo, floorTo, isZero } from './money';
 
 describe('money', () => {
   it('adds without float drift', () => expect(add(0.1, 0.2)).toBe(0.3));
@@ -8,4 +8,8 @@ describe('money', () => {
   it('divides and rounds to 8 dp', () => expect(div(1, 3)).toBe(0.33333333));
   it('rounds to given dp', () => expect(roundTo(1.005, 2)).toBe(1.01));
   it('isZero rejects real amounts', () => expect(isZero(0.00000001)).toBe(false));
+  it('floors toward zero instead of rounding up', () => {
+    expect(floorTo(0.123459, 5)).toBe(0.12345);
+    expect(floorTo(0.99999, 2)).toBe(0.99);
+  });
 });
