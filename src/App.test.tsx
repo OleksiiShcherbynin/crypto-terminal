@@ -29,7 +29,8 @@ it('renders the four regions', () => {
 
 it('switches bottom panel tabs and shows the empty state', async () => {
   renderWithStore(<App />);
-  expect(screen.getByRole('tabpanel')).toHaveTextContent('Nothing here yet');
+  expect(screen.getByRole('tabpanel')).toHaveTextContent('No positions yet');
   await userEvent.click(screen.getByRole('tab', { name: 'History' }));
+  expect(screen.getByRole('tabpanel')).toHaveTextContent('No trades yet');
   expect(screen.getByRole('tab', { name: 'History' })).toHaveAttribute('aria-selected', 'true');
 });

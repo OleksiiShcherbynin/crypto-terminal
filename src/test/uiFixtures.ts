@@ -1,4 +1,7 @@
-import type { RootState } from '../app/store';
+import { createElement, type ReactElement } from 'react';
+import { Provider } from 'react-redux';
+import { vi } from 'vitest';
+import type { AppStore, RootState } from '../app/store';
 import type { ConnectionStatus } from '../domain/types';
 import type { Candle } from '../domain/types';
 import { c, t } from './fixtures';
@@ -28,4 +31,51 @@ export function tradeState(status: ConnectionStatus = 'live'): Partial<RootState
     connection: { status, attempt: 0 },
     tickers: { BTCUSDT: t('BTCUSDT', 100) },
   };
+}
+
+export function positionsState(): Partial<RootState> {
+  return {
+    ...tradeState(),
+    tickers: { BTCUSDT: t('BTCUSDT', 101) },
+    portfolio: {
+      quoteBalance: 9_900,
+      reservedQuote: 0,
+      realizedPnl: 0,
+      trades: [],
+      positions: {
+        BTC: { asset: 'BTC', quantity: 1, avgPrice: 100, reservedQuantity: 0 },
+      },
+    },
+  };
+}
+
+export function historyState(): Partial<RootState> {
+  const base = { orderId: undefined, symbol: 'BTCUSDT', quantity: 1, price: 100, total: 100 };
+  return {
+    portfolio: {
+      quoteBalance: 10_000,
+      reservedQuote: 0,
+      realizedPnl: 0,
+      positions: {},
+      // Stored newest first, as the reducer produces it.
+      trades: [
+        { ...base, id: 't2', side: 'sell', type: 'market', executedAt: 5_000, realizedPnl: 5 },
+        { ...base, id: 't1', side: 'buy', type: 'limit', executedAt: 1_000, realizedPnl: 0 },
+      ],
+    },
+  };
+}
+
+/**
+ * Spies on store.dispatch and re-renders so hooks pick up the spy
+ * (useDispatch captures store.dispatch at render time).
+ */
+export function spyOnDispatch(
+  view: { store: AppStore; rerender: (ui: ReactElement) => void },
+  ui: ReactElement,
+) {
+  const spy = vi.spyOn(view.store, 'dispatch');
+  // oxlint-disable-next-line react/no-children-prop
+  view.rerender(createElement(Provider, { store: view.store, children: ui }));
+  return spy;
 }

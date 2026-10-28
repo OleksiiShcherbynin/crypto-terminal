@@ -1,5 +1,8 @@
 import { useState, type ReactNode } from 'react';
+import { selectActiveAlerts } from '../../features/alerts/alertsSlice';
+import { selectOpenOrders } from '../../features/orders/ordersSlice';
 import { Tabs } from '../../ui/Tabs';
+import { useAppSelector } from '../hooks';
 
 export type BottomTabId = 'positions' | 'orders' | 'history' | 'alerts';
 
@@ -18,6 +21,15 @@ export interface BottomPanelProps {
 export function BottomPanel({ panels = {}, status }: BottomPanelProps) {
   const [active, setActive] = useState<BottomTabId>('positions');
   const content = panels[active];
+  const orderCount = useAppSelector(selectOpenOrders).length;
+  const alertCount = useAppSelector(selectActiveAlerts).length;
+  const tabs = TABS.map((t) =>
+    t.id === 'orders' && orderCount > 0
+      ? { ...t, badge: orderCount }
+      : t.id === 'alerts' && alertCount > 0
+        ? { ...t, badge: alertCount }
+        : t,
+  );
   return (
     <section
       aria-label="Portfolio"
@@ -25,7 +37,7 @@ export function BottomPanel({ panels = {}, status }: BottomPanelProps) {
     >
       <div className="flex shrink-0 items-center justify-between border-b border-line pr-3">
         <Tabs
-          tabs={TABS}
+          tabs={tabs}
           active={active}
           onChange={(id) => setActive(id as BottomTabId)}
           idPrefix="portfolio"

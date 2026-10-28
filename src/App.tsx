@@ -1,8 +1,12 @@
 import { BottomPanel } from './app/components/BottomPanel';
+import { AlertsPanel } from './features/alerts/components/AlertsPanel';
 import { ChartPanel } from './features/chart/components/ChartPanel';
 import { TradeForm } from './features/orders/components/TradeForm';
 import { ConnectionStatus } from './features/market/components/ConnectionStatus';
 import { MarketList } from './features/market/components/MarketList';
+import { PositionsTable } from './features/portfolio/components/PositionsTable';
+import { TradeHistory } from './features/portfolio/components/TradeHistory';
+import { OpenOrdersTable } from './features/orders/components/OpenOrdersTable';
 import { Panel } from './ui/Panel';
 
 function App() {
@@ -32,7 +36,15 @@ function App() {
             <TradeForm />
           </Panel>
         </section>
-        <BottomPanel status={<ConnectionStatus />} />
+        <BottomPanel
+          panels={{
+            positions: <PositionsTable />,
+            orders: <OpenOrdersTable />,
+            history: <TradeHistory />,
+            alerts: <AlertsPanel />,
+          }}
+          status={<ConnectionStatus />}
+        />
       </main>
     </div>
   );
