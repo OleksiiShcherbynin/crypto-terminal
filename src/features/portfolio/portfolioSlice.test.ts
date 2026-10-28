@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest';
+﻿import { describe, expect, it } from 'vitest';
 import { orderCancelled, orderFilled, orderPlaced, portfolioReset } from '../../domain/actions';
 import { mul, sub } from '../../domain/money';
 import { fill, order } from '../../test/fixtures';
@@ -8,6 +8,7 @@ import portfolioReducer, {
   initialPortfolioState,
   type PortfolioState,
 } from './portfolioSlice';
+import { rootReducer } from '../../app/store';
 import { selectAvailableBase } from './selectors';
 import type { Action } from '@reduxjs/toolkit';
 
@@ -99,7 +100,9 @@ describe('portfolioSlice', () => {
     const o = order({ symbol: 'ETHUSDT', side: 'sell', price: 120, quantity: 0.2 });
     let s = reduce(orderPlaced(o), base);
     expect(s.positions.ETH.reservedQuantity).toBe(0.2);
-    expect(selectAvailableBase('ETH')({ portfolio: s, tickers: {} })).toBe(0.3);
+    expect(
+      selectAvailableBase('ETH')({ ...rootReducer(undefined, { type: 'init' }), portfolio: s }),
+    ).toBe(0.3);
     s = reduce(
       orderFilled(
         fill({ symbol: 'ETHUSDT', side: 'sell', type: 'limit', quantity: 0.2, price: 120 }),

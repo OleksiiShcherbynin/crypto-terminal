@@ -1,15 +1,12 @@
-import { describe, expect, it } from 'vitest';
+﻿import { describe, expect, it } from 'vitest';
 import { t } from '../../test/fixtures';
+import { rootReducer, type RootState } from '../../app/store';
 import { initialPortfolioState } from './portfolioSlice';
-import {
-  selectAvailableQuote,
-  selectEquity,
-  selectPositionRows,
-  type PortfolioRootState,
-} from './selectors';
+import { selectAvailableQuote, selectEquity, selectPositionRows } from './selectors';
 
-function state(tickers: PortfolioRootState['tickers']): PortfolioRootState {
+function state(tickers: RootState['tickers']): RootState {
   return {
+    ...rootReducer(undefined, { type: 'init' }),
     portfolio: {
       ...initialPortfolioState,
       quoteBalance: 8700,

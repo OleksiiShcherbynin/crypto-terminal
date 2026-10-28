@@ -1,10 +1,6 @@
-import { createSelector } from '@reduxjs/toolkit';
+﻿import { createSelector } from '@reduxjs/toolkit';
 import { add, div, mul, sub } from '../../domain/money';
-import type { Ticker } from '../../domain/types';
-import type { PortfolioState } from './portfolioSlice';
-
-// Task 8 switches this to RootState.
-export type PortfolioRootState = { portfolio: PortfolioState; tickers: Record<string, Ticker> };
+import type { RootState } from '../../app/store';
 
 export interface PositionRow {
   asset: string;
@@ -19,23 +15,23 @@ export interface PositionRow {
 
 const QUOTE = 'USDT';
 
-export const selectPortfolio = (s: PortfolioRootState) => s.portfolio;
-export const selectQuoteBalance = (s: PortfolioRootState) => s.portfolio.quoteBalance;
-export const selectRealizedPnl = (s: PortfolioRootState) => s.portfolio.realizedPnl;
-export const selectTrades = (s: PortfolioRootState) => s.portfolio.trades;
+export const selectPortfolio = (s: RootState) => s.portfolio;
+export const selectQuoteBalance = (s: RootState) => s.portfolio.quoteBalance;
+export const selectRealizedPnl = (s: RootState) => s.portfolio.realizedPnl;
+export const selectTrades = (s: RootState) => s.portfolio.trades;
 
-export const selectAvailableQuote = (s: PortfolioRootState): number =>
+export const selectAvailableQuote = (s: RootState): number =>
   sub(s.portfolio.quoteBalance, s.portfolio.reservedQuote);
 
 export const selectAvailableBase =
   (asset: string) =>
-  (s: PortfolioRootState): number => {
+  (s: RootState): number => {
     const position = s.portfolio.positions[asset];
     return position ? sub(position.quantity, position.reservedQuantity) : 0;
   };
 
 export const selectPositionRows = createSelector(
-  [(s: PortfolioRootState) => s.portfolio.positions, (s: PortfolioRootState) => s.tickers],
+  [(s: RootState) => s.portfolio.positions, (s: RootState) => s.tickers],
   (positions, tickers): PositionRow[] =>
     Object.values(positions)
       .map((p): PositionRow => {
