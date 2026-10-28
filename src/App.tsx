@@ -17,16 +17,19 @@ function App() {
     <div className="flex min-h-full flex-col xl:h-full">
       <EquityHeader />
       <ExternalChangeBanner />
-      <main className="grid min-h-0 flex-1 grid-cols-1 xl:grid-cols-[280px_1fr_320px] xl:grid-rows-[1fr_240px]">
+      <main className="grid min-h-0 flex-1 grid-cols-1 xl:grid-cols-[280px_1fr_320px] xl:grid-rows-[minmax(0,1fr)_240px]">
         <section
           aria-label="Market"
-          className="border-b border-line bg-panel xl:border-r xl:border-b-0"
+          className="border-b border-line bg-panel xl:min-h-0 xl:border-r xl:border-b-0"
         >
           <Panel title="Market">
             <MarketList />
           </Panel>
         </section>
-        <section aria-label="Chart" className="min-h-72 border-b border-line bg-bg xl:border-b-0">
+        <section
+          aria-label="Chart"
+          className="min-h-72 border-b border-line bg-bg xl:min-h-0 xl:border-b-0"
+        >
           <ChartPanel />
         </section>
         <section
