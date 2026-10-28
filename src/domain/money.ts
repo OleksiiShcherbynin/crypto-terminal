@@ -1,0 +1,37 @@
+import Big from 'big.js';
+
+const DP = 8;
+
+export function add(a: number, b: number): number {
+  return Number(new Big(a).plus(b).round(DP));
+}
+
+export function sub(a: number, b: number): number {
+  return Number(new Big(a).minus(b).round(DP));
+}
+
+export function mul(a: number, b: number): number {
+  return Number(new Big(a).times(b).round(DP));
+}
+
+export function div(a: number, b: number): number {
+  return Number(new Big(a).div(b).round(DP));
+}
+
+export function roundTo(value: number, dp: number): number {
+  return Number(new Big(value).round(dp));
+}
+
+/** Rounds toward zero (never up) to `dp` decimal places. */
+export function floorTo(value: number, dp: number): number {
+  return Number(new Big(value).round(dp, Big.roundDown));
+}
+
+/** Rounds away from zero (never down) to `dp` decimal places. */
+export function ceilTo(value: number, dp: number): number {
+  return Number(new Big(value).round(dp, Big.roundUp));
+}
+
+export function isZero(value: number): boolean {
+  return Math.abs(value) < 1e-8;
+}

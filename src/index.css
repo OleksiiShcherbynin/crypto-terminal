@@ -1,0 +1,79 @@
+@import 'tailwindcss';
+
+@theme {
+  --color-bg: #0a0c0f;
+  --color-panel: #0f1318;
+  --color-panel-2: #151a21;
+  --color-line: #1f2630;
+  --color-text: #d3d9e0;
+  --color-muted: #77828f;
+  --color-accent: #e3a73b;
+  --color-up: #2ebd85;
+  --color-down: #f0455a;
+
+  --font-sans: 'IBM Plex Sans', ui-sans-serif, system-ui, 'Segoe UI', sans-serif;
+  --font-mono: 'IBM Plex Mono', ui-monospace, 'Cascadia Mono', Consolas, monospace;
+
+  --animate-flash-up: flash-up 600ms ease-out;
+  --animate-flash-down: flash-down 600ms ease-out;
+
+  @keyframes flash-up {
+    from {
+      background-color: color-mix(in srgb, var(--color-up) 28%, transparent);
+    }
+    to {
+      background-color: transparent;
+    }
+  }
+  @keyframes flash-down {
+    from {
+      background-color: color-mix(in srgb, var(--color-down) 28%, transparent);
+    }
+    to {
+      background-color: transparent;
+    }
+  }
+}
+
+@layer base {
+  html,
+  body,
+  #root {
+    height: 100%;
+  }
+  body {
+    margin: 0;
+    background: var(--color-bg);
+    color: var(--color-text);
+    font-family: var(--font-sans);
+    font-size: 13px;
+    line-height: 1.4;
+    color-scheme: dark;
+    -webkit-font-smoothing: antialiased;
+  }
+  :focus-visible {
+    outline: 1px solid var(--color-accent);
+    outline-offset: 1px;
+  }
+}
+
+@utility tabular {
+  font-family: var(--font-mono);
+  font-variant-numeric: tabular-nums;
+}
+
+@utility flash-up {
+  animation: var(--animate-flash-up);
+
+  @media (prefers-reduced-motion: reduce) {
+    animation: none;
+  }
+}
+
+@utility flash-down {
+  animation: var(--animate-flash-down);
+
+  @media (prefers-reduced-motion: reduce) {
+    animation: none;
+  }
+}
