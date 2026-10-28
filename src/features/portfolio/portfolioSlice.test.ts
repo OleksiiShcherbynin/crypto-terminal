@@ -1,4 +1,4 @@
-﻿import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { orderCancelled, orderFilled, orderPlaced, portfolioReset } from '../../domain/actions';
 import { mul, sub } from '../../domain/money';
 import { fill, order } from '../../test/fixtures';

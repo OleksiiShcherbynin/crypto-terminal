@@ -1,4 +1,4 @@
-﻿import type { RootState } from './store';
+import type { RootState } from './store';
 import type { PortfolioState } from '../features/portfolio/portfolioSlice';
 import type { OrdersState } from '../features/orders/ordersSlice';
 import type { AlertsState } from '../features/alerts/alertsSlice';

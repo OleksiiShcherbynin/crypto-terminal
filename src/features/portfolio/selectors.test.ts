@@ -1,4 +1,4 @@
-﻿import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { t } from '../../test/fixtures';
 import { rootReducer, type RootState } from '../../app/store';
 import { initialPortfolioState } from './portfolioSlice';

@@ -1,4 +1,4 @@
-﻿import { createSelector } from '@reduxjs/toolkit';
+import { createSelector } from '@reduxjs/toolkit';
 import { add, div, mul, sub } from '../../domain/money';
 import type { RootState } from '../../app/store';
 
@@ -15,7 +15,6 @@ export interface PositionRow {
 
 const QUOTE = 'USDT';
 
-export const selectPortfolio = (s: RootState) => s.portfolio;
 export const selectQuoteBalance = (s: RootState) => s.portfolio.quoteBalance;
 export const selectRealizedPnl = (s: RootState) => s.portfolio.realizedPnl;
 export const selectTrades = (s: RootState) => s.portfolio.trades;

@@ -231,6 +231,18 @@ describe('marketStreamSaga', () => {
     expect(unsubscribed).toHaveBeenCalledTimes(1);
   });
 
+  it('closes the channel when the saga fails, so a supervised restart starts clean', async () => {
+    const deps = fakeDeps();
+    const unsubscribed = trackUnsubscribe(deps.client);
+    deps.client.open = () => {
+      throw new Error('boom');
+    };
+    await expect(expectSaga(marketStreamSaga, deps, STEADY).run({ timeout: 200 })).rejects.toThrow(
+      'boom',
+    );
+    expect(unsubscribed).toHaveBeenCalledTimes(1);
+  });
+
   it('backoffMs doubles to a 30 s cap', () =>
     expect([1, 2, 3, 6].map(backoffMs)).toEqual([1000, 2000, 4000, 30000]));
 });

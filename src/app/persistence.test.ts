@@ -1,4 +1,4 @@
-﻿import { describe, expect, it, vi } from 'vitest';
+import { describe, expect, it, vi } from 'vitest';
 import { fakeStorage } from '../test/fixtures';
 import { rootReducer } from './store';
 import {

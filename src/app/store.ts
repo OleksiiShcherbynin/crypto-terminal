@@ -1,4 +1,4 @@
-﻿import { combineReducers, configureStore, type EnhancedStore } from '@reduxjs/toolkit';
+import { combineReducers, configureStore, type EnhancedStore } from '@reduxjs/toolkit';
 import createSagaMiddleware, { type Task } from 'redux-saga';
 import tickers from '../features/market/tickersSlice';
 import connection from '../features/market/connectionSlice';

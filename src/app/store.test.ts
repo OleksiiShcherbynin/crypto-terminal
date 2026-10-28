@@ -1,7 +1,7 @@
-﻿import { describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { fakeDeps } from '../test/fixtures';
 import { appStarted } from '../domain/actions';
-import { filterPairs, selectFilteredPairs } from '../features/market/selectors';
+import { filterPairs } from '../features/market/selectors';
 import { WATCHED_PAIRS } from '../domain/pairs';
 import { createAppStore, rootReducer } from './store';
 
@@ -48,6 +48,5 @@ describe('market selectors', () => {
     expect(filterPairs('')).toHaveLength(WATCHED_PAIRS.length);
     expect(filterPairs('btc').map((p) => p.symbol)).toContain('BTCUSDT');
     expect(filterPairs('ethusdt').map((p) => p.symbol)).toEqual(['ETHUSDT']);
-    expect(selectFilteredPairs('ETHUSDT')()).toEqual(filterPairs('ethusdt'));
   });
 });

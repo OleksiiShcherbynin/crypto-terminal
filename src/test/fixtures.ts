@@ -1,4 +1,4 @@
-﻿import { vi } from 'vitest';
+import { vi } from 'vitest';
 import type { SagaDeps } from '../app/store';
 import { WS_HOSTS } from '../services/binance/hosts';
 import { createFakeSocketClient } from '../services/binance/testing';

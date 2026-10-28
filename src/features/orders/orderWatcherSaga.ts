@@ -1,5 +1,4 @@
-import type { PayloadAction } from '@reduxjs/toolkit';
-import type { Action } from '@reduxjs/toolkit';
+import type { Action, PayloadAction } from '@reduxjs/toolkit';
 import type { SagaIterator } from 'redux-saga';
 import { call, fork, put, race, select, take, takeEvery } from 'redux-saga/effects';
 import type { SagaDeps } from '../../app/store';

@@ -125,10 +125,7 @@ export function* marketStreamSaga(
       // Always detach the old socket (idempotent): a silent one is still open, and after an
       // 'error' its 'close' may still be pending; once detached, its late events are ignored.
       yield call([client, client.close]);
-      if (outcome === 'stopped') {
-        channel.close();
-        return;
-      }
+      if (outcome === 'stopped') return;
       // A connection that worked and then dropped starts again from attempt 1.
       if (opened) attempt = 0;
       attempt += 1;
@@ -138,17 +135,14 @@ export function* marketStreamSaga(
         wait: delay(options.backoff(attempt)),
         stop: take(streamStopped.type),
       });
-      // The client is already closed above, so stopping here only has to close the channel.
-      if (stop) {
-        channel.close();
-        return;
-      }
+      // The client is already closed above; `finally` closes the channel.
+      if (stop) return;
     }
   } finally {
+    // Always detach the listener (stop, failure or cancellation) so a supervised restart
+    // never leaves a stale channel attached to the shared client.
+    channel.close();
     const wasCancelled: boolean = yield cancelled();
-    if (wasCancelled) {
-      channel.close();
-      yield call([client, client.close]);
-    }
+    if (wasCancelled) yield call([client, client.close]);
   }
 }

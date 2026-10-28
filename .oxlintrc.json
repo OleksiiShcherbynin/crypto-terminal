@@ -17,7 +17,6 @@
   "ignorePatterns": [
     "dist",
     ".superpowers",
-    "docs",
-    ".worktrees/**"
+    "docs"
   ]
 }

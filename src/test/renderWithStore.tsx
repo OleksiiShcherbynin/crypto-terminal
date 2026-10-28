@@ -1,4 +1,4 @@
-﻿import type { ReactElement } from 'react';
+import type { ReactElement } from 'react';
 import { render, type RenderResult } from '@testing-library/react';
 import { Provider } from 'react-redux';
 import { createAppStore, type AppStore, type RootState } from '../app/store';

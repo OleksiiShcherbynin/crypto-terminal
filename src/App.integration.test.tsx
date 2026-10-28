@@ -60,7 +60,7 @@ it('streams a price, fills a market buy and shows it everywhere', async () => {
   expect(deps.client.openedHosts).toHaveLength(1);
 });
 
-it('cancels a resting limit order through the saga, so a later cross does not fill it', async () => {
+it('a cancelled limit order leaves the table and a later cross does not fill it', async () => {
   const { deps, store, tick } = boot();
   act(() => deps.client.emit({ type: 'open' }));
   tick('BTCUSDT', 100);
