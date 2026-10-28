@@ -1,8 +1,19 @@
 import { screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
-import { it, expect } from 'vitest';
+import { it, expect, vi } from 'vitest';
 import App from './App';
 import { renderWithStore } from './test/renderWithStore';
+
+// jsdom has no canvas; the real chart cannot render here.
+vi.mock('lightweight-charts', () => ({
+  CandlestickSeries: 'Candlestick',
+  createChart: () => ({
+    addSeries: () => ({ setData: vi.fn(), update: vi.fn(), applyOptions: vi.fn() }),
+    applyOptions: vi.fn(),
+    remove: vi.fn(),
+    timeScale: () => ({ fitContent: vi.fn() }),
+  }),
+}));
 
 it('renders the title', () => {
   renderWithStore(<App />);
