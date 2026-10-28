@@ -52,15 +52,29 @@ describe('persistenceSaga', () => {
       .put(externalChangeDetected())
       .silentRun(50);
     target.dispatchEvent(new StorageEvent('storage', { key: STORAGE_KEY }));
-    const result = await run;
-    expect(result.effects.put).toBeUndefined();
+    await run;
   });
 
   it('ignores other keys', async () => {
     const target = new EventTarget();
-    const run = expectSaga(watchExternalChanges, target).silentRun(50);
+    const run = expectSaga(watchExternalChanges, target)
+      .not.put(externalChangeDetected())
+      .silentRun(50);
     target.dispatchEvent(new StorageEvent('storage', { key: 'something-else' }));
-    const result = await run;
-    expect(result.allEffects.filter((e) => 'PUT' in e)).toHaveLength(0);
+    await run;
+  });
+
+  it('flushes immediately on pagehide, before the debounce elapses', async () => {
+    const storage = fakeStorage();
+    const target = new EventTarget();
+    const run = expectSaga(persistenceSaga, { storage }, { debounceMs: 10_000, target })
+      .withReducer(rootReducer, initial())
+      .dispatch(orderPlaced(order({ id: 'o9' })))
+      .silentRun(50);
+    await new Promise((r) => setTimeout(r, 20));
+    target.dispatchEvent(new Event('pagehide'));
+    const raw = storage.getItem(STORAGE_KEY) ?? '';
+    expect(raw).toContain('o9');
+    await run;
   });
 });

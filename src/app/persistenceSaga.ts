@@ -34,12 +34,35 @@ export function* persist(deps: Pick<SagaDeps, 'storage'>): SagaIterator {
 }
 
 /** Browsers fire 'storage' only in the other tabs, so our own writes never arrive here. */
-export function createStorageChannel(target: StorageTarget): EventChannel<StorageEvent> {
-  return eventChannel<StorageEvent>((emit) => {
-    const listener = (e: Event) => emit(e as StorageEvent);
-    target.addEventListener('storage', listener);
-    return () => target.removeEventListener('storage', listener);
+export function createDomEventChannel<E extends Event>(
+  target: StorageTarget,
+  type: string,
+): EventChannel<E> {
+  return eventChannel<E>((emit) => {
+    const listener = (e: Event) => emit(e as E);
+    target.addEventListener(type, listener);
+    return () => target.removeEventListener(type, listener);
   });
+}
+
+export function createStorageChannel(target: StorageTarget): EventChannel<StorageEvent> {
+  return createDomEventChannel<StorageEvent>(target, 'storage');
+}
+
+/** Flushes pending changes synchronously when the page is being hidden or closed. */
+export function* flushOnPageHide(
+  deps: Pick<SagaDeps, 'storage'>,
+  target: StorageTarget,
+): SagaIterator {
+  const channel: EventChannel<Event> = yield call(createDomEventChannel, target, 'pagehide');
+  try {
+    while (true) {
+      yield take(channel);
+      yield call(persist, deps);
+    }
+  } finally {
+    channel.close();
+  }
 }
 
 export function* watchExternalChanges(target: StorageTarget): SagaIterator {
@@ -62,6 +85,9 @@ export function* persistenceSaga(
   opts: { debounceMs?: number; target?: StorageTarget } = {},
 ): SagaIterator {
   const target = opts.target ?? (typeof window !== 'undefined' ? window : undefined);
-  if (target) yield fork(watchExternalChanges, target);
+  if (target) {
+    yield fork(watchExternalChanges, target);
+    yield fork(flushOnPageHide, deps, target);
+  }
   yield debounce(opts.debounceMs ?? PERSIST_DEBOUNCE_MS, PERSISTED_ACTIONS, persist, deps);
 }
