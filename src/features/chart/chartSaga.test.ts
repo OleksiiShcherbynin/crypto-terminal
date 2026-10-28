@@ -6,11 +6,14 @@ import { rootReducer } from '../../app/store';
 import type { Candle } from '../../domain/types';
 import { c, fakeDeps } from '../../test/fixtures';
 import { connectionStatusChanged } from '../market/connectionSlice';
-import { pairSelected } from '../market/selectionSlice';
+import { intervalChanged, pairSelected } from '../market/selectionSlice';
 import { candlesLoaded, candlesLoading, candlesUnavailable } from './candlesSlice';
-import { HISTORY_LIMIT, chartSaga } from './chartSaga';
+import { HISTORY_LIMIT, SWITCH_DEBOUNCE_MS, chartSaga } from './chartSaga';
 
 const initial = () => rootReducer(undefined, { type: '@@init' });
+// Pair/interval switches are debounced; most tests only need the debounce to be short.
+const FAST = { switchDebounceMs: 1 };
+const withSignal = expect.objectContaining({ signal: expect.any(AbortSignal) });
 
 describe('chartSaga', () => {
   it('subscribes the kline stream, unsubscribes the old one and loads history', async () => {
@@ -26,7 +29,7 @@ describe('chartSaga', () => {
     expect(deps.client.streams.has('btcusdt@kline_1m')).toBe(true);
     expect(deps.client.streams.has('ethusdt@kline_1m')).toBe(false);
     expect(deps.client.streams.has('btcusdt@miniTicker')).toBe(true);
-    expect(deps.fetchKlines).toHaveBeenCalledWith('BTCUSDT', '1m', HISTORY_LIMIT);
+    expect(deps.fetchKlines).toHaveBeenCalledWith('BTCUSDT', '1m', HISTORY_LIMIT, withSignal);
     expect(result.storeState.candles.status).toBe('ready');
   });
 
@@ -53,11 +56,13 @@ describe('chartSaga', () => {
     );
     // The stale ETH request settles after the BTC load has finished.
     setTimeout(() => resolveEth([c(9)]), 25);
-    const result = await expectSaga(chartSaga, deps)
+    const result = await expectSaga(chartSaga, deps, FAST)
       .withReducer(rootReducer, initial())
       .dispatch(pairSelected('ETHUSDT'))
+      .delay(10)
       .dispatch(pairSelected('BTCUSDT'))
       .silentRun(60);
+    expect(deps.fetchKlines).toHaveBeenCalledTimes(2);
     const loaded = result.allEffects
       .filter((e): e is PutEffect => e.type === 'PUT')
       .map((e) => e.payload.action)
@@ -66,6 +71,49 @@ describe('chartSaga', () => {
     expect(loaded.some((a) => a.payload.symbol === 'ETHUSDT')).toBe(false);
     expect(deps.client.streams.has('ethusdt@kline_1m')).toBe(false);
     expect(deps.client.streams.has('btcusdt@kline_1m')).toBe(true);
+  });
+
+  it('debounces rapid switches into one resubscribe and one fetch for the final pair', async () => {
+    const deps = fakeDeps();
+    deps.client.subscribe(['btcusdt@kline_1m']);
+    const subscribe = vi.spyOn(deps.client, 'subscribe');
+    const unsubscribe = vi.spyOn(deps.client, 'unsubscribe');
+    const result = await expectSaga(chartSaga, deps)
+      .withReducer(rootReducer, initial())
+      .dispatch(pairSelected('ETHUSDT'))
+      .delay(50)
+      .dispatch(intervalChanged('15m'))
+      .delay(50)
+      .dispatch(pairSelected('SOLUSDT'))
+      .silentRun(SWITCH_DEBOUNCE_MS + 250);
+    expect(unsubscribe.mock.calls).toEqual([[['btcusdt@kline_1m']]]);
+    expect(subscribe.mock.calls).toEqual([[['solusdt@kline_15m']]]);
+    expect(deps.fetchKlines).toHaveBeenCalledTimes(1);
+    expect(deps.fetchKlines).toHaveBeenCalledWith('SOLUSDT', '15m', HISTORY_LIMIT, withSignal);
+    // Every switch still shows loading right away.
+    const loading = result.allEffects
+      .filter((e): e is PutEffect => e.type === 'PUT')
+      .map((e) => e.payload.action)
+      .filter(candlesLoading.match)
+      .map((a) => a.payload.symbol);
+    expect(loading).toEqual(['ETHUSDT', 'ETHUSDT', 'SOLUSDT']);
+  });
+
+  it('aborts the request of a superseded load', async () => {
+    const deps = fakeDeps();
+    const signals: Record<string, AbortSignal | undefined> = {};
+    vi.mocked(deps.fetchKlines).mockImplementation((symbol, _interval, _limit, opts) => {
+      signals[symbol] = opts?.signal;
+      return symbol === 'ETHUSDT' ? new Promise<Candle[]>(() => {}) : Promise.resolve([c(2)]);
+    });
+    await expectSaga(chartSaga, deps, FAST)
+      .withReducer(rootReducer, initial())
+      .dispatch(pairSelected('ETHUSDT'))
+      .delay(10)
+      .dispatch(pairSelected('BTCUSDT'))
+      .silentRun(60);
+    expect(signals.ETHUSDT?.aborted).toBe(true);
+    expect(signals.BTCUSDT?.aborted).toBe(false);
   });
 
   describe('silent refresh', () => {

@@ -6,6 +6,7 @@ import {
   type ISeriesApi,
   type UTCTimestamp,
 } from 'lightweight-charts';
+import { formatPrice } from '../../../domain/format';
 import type { Candle, Interval } from '../../../domain/types';
 import type { CandlesState } from '../candlesSlice';
 
@@ -32,6 +33,11 @@ function token(name: string, fallback: string): string {
 
 function priceFormat(precision: number) {
   return { type: 'price' as const, precision, minMove: 10 ** -precision };
+}
+
+/** Axis and crosshair labels read like the rest of the UI (80,674.56). */
+function localization(precision: number) {
+  return { priceFormatter: (price: number) => formatPrice(price, precision) };
 }
 
 const toBar = (c: Candle) => ({
@@ -74,6 +80,7 @@ export function CandleChart({
         textColor: token('--color-muted', FALLBACK.text),
         fontFamily: token('--font-mono', 'monospace'),
       },
+      localization: localization(precisionRef.current),
       grid: { vertLines: { color: line }, horzLines: { color: line } },
       rightPriceScale: { borderColor: line },
       timeScale: { borderColor: line, timeVisible: true, secondsVisible: false },
@@ -100,6 +107,7 @@ export function CandleChart({
 
   useEffect(() => {
     precisionRef.current = pricePrecision;
+    chartRef.current?.applyOptions({ localization: localization(pricePrecision) });
     seriesRef.current?.applyOptions({ priceFormat: priceFormat(pricePrecision) });
   }, [pricePrecision]);
 

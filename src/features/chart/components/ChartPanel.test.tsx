@@ -13,16 +13,26 @@ const update = vi.fn();
 const fitContent = vi.fn();
 const remove = vi.fn();
 const applyOptions = vi.fn();
+const chartApplyOptions = vi.fn();
+const createChart = vi.fn();
+
+type Formatter = (price: number) => string;
+const formatterOf = (options: unknown): Formatter =>
+  (options as { localization: { priceFormatter: Formatter } }).localization.priceFormatter;
 
 vi.mock('lightweight-charts', () => ({
   CandlestickSeries: 'Candlestick',
-  createChart: () => ({
+  createChart: (...args: unknown[]) => createChart(...args),
+}));
+
+beforeEach(() => {
+  createChart.mockImplementation(() => ({
     addSeries: () => ({ setData, update, applyOptions }),
-    applyOptions: vi.fn(),
+    applyOptions: chartApplyOptions,
     remove,
     timeScale: () => ({ fitContent }),
-  }),
-}));
+  }));
+});
 
 import { ChartPanel } from './ChartPanel';
 
@@ -32,6 +42,7 @@ beforeEach(() => {
   fitContent.mockClear();
   remove.mockClear();
   applyOptions.mockClear();
+  chartApplyOptions.mockClear();
 });
 afterEach(cleanup);
 
@@ -136,4 +147,15 @@ it('pair change re-applies priceFormat with the new precision', () => {
   expect(applyOptions).toHaveBeenCalledWith({
     priceFormat: { type: 'price', precision: 8, minMove: 1e-8 },
   });
+});
+
+it('price scale labels use the app price format with grouping and pair precision', () => {
+  const { store } = renderWithStore(<ChartPanel />, { preloadedState: chartState() });
+  const created = createChart.mock.calls.at(-1)?.[1];
+  expect(formatterOf(created)(80_674.5612)).toBe('80,674.56');
+  act(() => {
+    store.dispatch(pairSelected('PEPEUSDT'));
+  });
+  const applied = chartApplyOptions.mock.calls.at(-1)?.[0];
+  expect(formatterOf(applied)(0.0000123)).toBe('0.00001230');
 });

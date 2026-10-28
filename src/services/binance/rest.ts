@@ -15,26 +15,71 @@ function toCandle(row: unknown): Candle {
   return candle;
 }
 
-/** Tries hosts in order; a network error, non-OK status or malformed body moves to the next host. */
+/** Per-host budget: a host that has not answered by then counts as failed. */
+export const KLINES_TIMEOUT_MS = 8_000;
+
+function abortError(signal: AbortSignal): unknown {
+  return signal.reason ?? new DOMException('The operation was aborted.', 'AbortError');
+}
+
+function timeoutSignal(ms: number): AbortSignal {
+  if (typeof AbortSignal.timeout === 'function') return AbortSignal.timeout(ms);
+  const controller = new AbortController();
+  setTimeout(() => controller.abort(new DOMException('Timed out', 'TimeoutError')), ms);
+  return controller.signal;
+}
+
+/** Aborts as soon as any input aborts (AbortSignal.any where available). */
+function anySignal(signals: AbortSignal[]): AbortSignal {
+  if (typeof AbortSignal.any === 'function') return AbortSignal.any(signals);
+  const controller = new AbortController();
+  for (const signal of signals) {
+    if (signal.aborted) {
+      controller.abort(signal.reason);
+      break;
+    }
+    signal.addEventListener('abort', () => controller.abort(signal.reason), { once: true });
+  }
+  return controller.signal;
+}
+
+export interface FetchKlinesDeps {
+  fetchImpl?: typeof fetch;
+  hosts?: readonly string[];
+  /** Caller cancellation: stops at once, without trying further hosts. */
+  signal?: AbortSignal;
+  timeoutMs?: number;
+}
+
+/**
+ * Tries hosts in order; a network error, timeout, non-OK status or malformed body moves to the
+ * next host. An abort by the caller rethrows immediately.
+ */
 export async function fetchKlines(
   symbol: string,
   interval: Interval,
   limit: number,
-  deps: { fetchImpl?: typeof fetch; hosts?: readonly string[] } = {},
+  deps: FetchKlinesDeps = {},
 ): Promise<Candle[]> {
   const fetchImpl = deps.fetchImpl ?? ((...args) => globalThis.fetch(...args));
   const hosts = deps.hosts ?? REST_HOSTS;
+  const { signal } = deps;
+  const timeoutMs = deps.timeoutMs ?? KLINES_TIMEOUT_MS;
   for (const host of hosts) {
+    if (signal?.aborted) throw abortError(signal);
+    const timeout = timeoutSignal(timeoutMs);
     try {
       const res = await fetchImpl(
         `https://${host}/api/v3/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`,
+        { signal: signal ? anySignal([signal, timeout]) : timeout },
       );
       if (!res.ok) continue;
       const body: unknown = await res.json();
       if (!Array.isArray(body)) continue;
       return body.map(toCandle);
     } catch {
-      // try next host
+      if (signal?.aborted) throw abortError(signal);
+      // otherwise: try next host
     }
   }
   throw new Error('klines unavailable');

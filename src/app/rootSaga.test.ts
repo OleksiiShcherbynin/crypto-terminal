@@ -11,7 +11,12 @@ describe('rootSaga', () => {
       expect(deps.client.streams.has('btcusdt@miniTicker')).toBe(true);
       expect(deps.client.streams.has('btcusdt@kline_1m')).toBe(true);
       expect(deps.fetchKlines).toHaveBeenCalledTimes(1);
-      expect(deps.fetchKlines).toHaveBeenCalledWith('BTCUSDT', '1m', 300);
+      expect(deps.fetchKlines).toHaveBeenCalledWith(
+        'BTCUSDT',
+        '1m',
+        300,
+        expect.objectContaining({ signal: expect.any(AbortSignal) }),
+      );
     } finally {
       sagaTask?.cancel();
     }

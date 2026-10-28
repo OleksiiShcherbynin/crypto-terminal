@@ -45,4 +45,52 @@ describe('fetchKlines', () => {
       'klines unavailable',
     );
   });
+
+  describe('timeouts and cancellation', () => {
+    /** A host that never answers; it settles only when its request signal aborts. */
+    const hanging = (_url: string, init?: RequestInit) =>
+      new Promise<Response>((_, reject) => {
+        init?.signal?.addEventListener('abort', () => reject(init.signal?.reason));
+      });
+
+    it('falls back to the next host when the first one hangs past the timeout', async () => {
+      const fetchImpl = vi
+        .fn<typeof fetch>()
+        .mockImplementationOnce((url, init) => hanging(String(url), init))
+        .mockResolvedValueOnce(ok());
+      expect(
+        await fetchKlines('BTCUSDT', '1m', 1, { fetchImpl, hosts: ['a', 'b'], timeoutMs: 20 }),
+      ).toEqual(expected);
+      expect(fetchImpl).toHaveBeenCalledTimes(2);
+    });
+
+    it('passes a signal to every request', async () => {
+      const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(ok());
+      await fetchKlines('BTCUSDT', '1m', 1, { fetchImpl, hosts: ['h'] });
+      expect(fetchImpl.mock.calls[0][1]?.signal).toBeInstanceOf(AbortSignal);
+    });
+
+    it('stops at the first host and rethrows when the caller aborts', async () => {
+      const controller = new AbortController();
+      const fetchImpl = vi.fn<typeof fetch>((url, init) => hanging(String(url), init));
+      const pending = fetchKlines('BTCUSDT', '1m', 1, {
+        fetchImpl,
+        hosts: ['a', 'b'],
+        signal: controller.signal,
+      });
+      controller.abort();
+      await expect(pending).rejects.toMatchObject({ name: 'AbortError' });
+      expect(fetchImpl).toHaveBeenCalledTimes(1);
+    });
+
+    it('does not start a request when the caller already aborted', async () => {
+      const controller = new AbortController();
+      controller.abort();
+      const fetchImpl = vi.fn<typeof fetch>().mockResolvedValue(ok());
+      await expect(
+        fetchKlines('BTCUSDT', '1m', 1, { fetchImpl, hosts: ['a'], signal: controller.signal }),
+      ).rejects.toMatchObject({ name: 'AbortError' });
+      expect(fetchImpl).not.toHaveBeenCalled();
+    });
+  });
 });
