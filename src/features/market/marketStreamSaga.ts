@@ -118,21 +118,31 @@ export function* marketStreamSaga(
     let attempt = 0;
     yield put(connectionStatus(attempt));
     while (true) {
+      // Drop anything the previous socket left in the channel so it cannot end this connection.
+      yield flush(channel);
       yield call([client, client.open], pickHost(wsHosts, attempt));
       const { outcome, opened }: StreamOutcome = yield call(consumeStream, channel, options);
+      // Always detach the old socket (idempotent): a silent one is still open, and after an
+      // 'error' its 'close' may still be pending; once detached, its late events are ignored.
+      yield call([client, client.close]);
       if (outcome === 'stopped') {
         channel.close();
-        yield call([client, client.close]);
         return;
       }
-      // A silent socket is still open; a closed one is already gone.
-      if (outcome === 'silent') yield call([client, client.close]);
       // A connection that worked and then dropped starts again from attempt 1.
       if (opened) attempt = 0;
       attempt += 1;
       // Report the loss right away, not after the backoff: a dead socket must never look live.
       yield put(connectionStatus(attempt));
-      yield delay(options.backoff(attempt));
+      const { stop }: { wait?: true; stop?: ReturnType<typeof streamStopped> } = yield race({
+        wait: delay(options.backoff(attempt)),
+        stop: take(streamStopped.type),
+      });
+      // The client is already closed above, so stopping here only has to close the channel.
+      if (stop) {
+        channel.close();
+        return;
+      }
     }
   } finally {
     const wasCancelled: boolean = yield cancelled();

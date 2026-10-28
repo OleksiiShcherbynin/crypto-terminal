@@ -181,6 +181,47 @@ describe('marketStreamSaga', () => {
     expect(unsubscribed).toHaveBeenCalledTimes(1);
   });
 
+  it('stops during the backoff wait instead of reconnecting', async () => {
+    const deps = fakeDeps();
+    const unsubscribed = trackUnsubscribe(deps.client);
+    later(10, () => deps.client.emit({ type: 'open' }));
+    later(20, () => deps.client.emit({ type: 'close', code: 1006 }));
+    const started = Date.now();
+    await expectSaga(marketStreamSaga, deps, { ...STEADY, backoff: () => 1000 })
+      .put(connectionStatusChanged({ status: 'reconnecting', attempt: 1 }))
+      .delay(50)
+      .dispatch(streamStopped())
+      .run({ timeout: 500 });
+    // The saga returned on its own, well before the run timeout would have cancelled it.
+    expect(Date.now() - started).toBeLessThan(400);
+    expect(deps.client.openedHosts).toHaveLength(1);
+    expect(deps.client.closeCount).toBe(1);
+    expect(unsubscribed).toHaveBeenCalledTimes(1);
+  });
+
+  it('drops a late event from the old socket that arrives during the backoff', async () => {
+    const deps = fakeDeps();
+    const open = deps.client.open;
+    let opens = 0;
+    deps.client.open = (host) => {
+      open(host);
+      opens += 1;
+      if (opens === 1) {
+        // A real WebSocket fires 'error' and 'close' as separate tasks; here a batch
+        // boundary falls between them and the 'close' lands while the saga waits to reconnect.
+        queueMicrotask(() => deps.client.emit({ type: 'error' }));
+        later(25, () => deps.client.emit({ type: 'close', code: 1006 }));
+      }
+      if (opens === 2) later(10, () => deps.client.emit({ type: 'open' }));
+    };
+    await expectSaga(marketStreamSaga, deps, { ...STEADY, backoff: () => 50 })
+      .put(connectionStatusChanged({ status: 'reconnecting', attempt: 1 }))
+      .put(connectionStatusChanged({ status: 'live', attempt: 0 }))
+      .not.put(connectionStatusChanged({ status: 'reconnecting', attempt: 2 }))
+      .silentRun(200);
+    expect(deps.client.openedHosts).toHaveLength(2);
+  });
+
   it('closes the channel and the client when cancelled', async () => {
     const deps = fakeDeps();
     const unsubscribed = trackUnsubscribe(deps.client);
