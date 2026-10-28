@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { OrderRequest } from '../../domain/types';
 import { findPair } from '../../domain/pairs';
-import { orderCost, validateOrder, type OrderContext } from './validation';
+import { limitPricePrefill, orderCost, validateOrder, type OrderContext } from './validation';
 
 const pair = findPair('BTCUSDT')!;
 const ctx = (partial: Partial<OrderContext> = {}): OrderContext => ({
@@ -88,5 +88,25 @@ describe('validateOrder', () => {
 
   it('returns null for a valid limit sell above market', () => {
     expect(validateOrder(req({ side: 'sell', type: 'limit', price: 110 }), ctx())).toBeNull();
+  });
+});
+
+describe('limitPricePrefill', () => {
+  it('prefills a buy limit 0.5 % below the last price, rounded down', () => {
+    expect(limitPricePrefill('buy', 100, 2)).toBe('99.50');
+    expect(limitPricePrefill('buy', 80_674.57, 2)).toBe('80271.19');
+  });
+  it('prefills a sell limit 0.5 % above the last price, rounded up', () => {
+    expect(limitPricePrefill('sell', 100, 2)).toBe('100.50');
+    expect(limitPricePrefill('sell', 80_674.57, 2)).toBe('81077.95');
+  });
+  it('lands on the valid side of the last price', () => {
+    const last = 0.00001234;
+    const buy = Number(limitPricePrefill('buy', last, 8));
+    const sell = Number(limitPricePrefill('sell', last, 8));
+    expect(validateOrder(req({ type: 'limit', price: buy }), ctx({ lastPrice: last }))).toBeNull();
+    expect(
+      validateOrder(req({ side: 'sell', type: 'limit', price: sell }), ctx({ lastPrice: last })),
+    ).toBeNull();
   });
 });

@@ -1,5 +1,5 @@
-import { mul } from '../../domain/money';
-import type { ConnectionStatus, OrderRequest, Pair } from '../../domain/types';
+import { ceilTo, floorTo, mul } from '../../domain/money';
+import type { ConnectionStatus, OrderRequest, Pair, Side } from '../../domain/types';
 
 export interface OrderContext {
   pair: Pair;
@@ -16,6 +16,18 @@ export interface OrderError {
 
 export function orderCost(req: OrderRequest, lastPrice: number): number {
   return mul(req.quantity, req.price ?? lastPrice);
+}
+
+/**
+ * Limit price the form starts with: 0.5 % on the valid side of the last price (below for a buy,
+ * above for a sell), rounded away from the last price so it never lands on it.
+ */
+export function limitPricePrefill(side: Side, lastPrice: number, precision: number): string {
+  const price =
+    side === 'buy'
+      ? floorTo(mul(lastPrice, 0.995), precision)
+      : ceilTo(mul(lastPrice, 1.005), precision);
+  return price.toFixed(precision);
 }
 
 export function validateOrder(req: OrderRequest, ctx: OrderContext): OrderError | null {

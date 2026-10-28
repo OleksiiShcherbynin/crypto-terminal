@@ -1,13 +1,14 @@
 import { useState } from 'react';
 import { useAppDispatch, useAppSelector } from '../../../app/hooks';
 import { findPair } from '../../../domain/pairs';
+import { parseDecimal } from '../../../domain/parse';
 import type { AlertDirection, AlertRequest, Pair } from '../../../domain/types';
 import { Button } from '../../../ui/Button';
 import { Input } from '../../../ui/Input';
 import { Segmented } from '../../../ui/Segmented';
 import { selectSelection, selectTicker } from '../../market/selectors';
 import { alertRequested } from '../alertsSlice';
-import { validateAlert } from '../validation';
+import { alertHit, alertPricePrefill, validateAlert } from '../validation';
 
 const DIRECTIONS = [
   { value: 'above', label: 'Above' },
@@ -21,35 +22,57 @@ export function AlertForm() {
   return pair ? <AlertFormFor key={symbol} pair={pair} /> : null;
 }
 
+/**
+ * The untouched alert price: computed from the price at the last direction switch, and
+ * recomputed from the live price only once the market has reached it.
+ */
+function prefillPrice(
+  direction: AlertDirection,
+  anchor: number | undefined,
+  last: number | undefined,
+  pair: Pair,
+): string {
+  const base = anchor ?? last;
+  if (base === undefined) return '';
+  const anchored = alertPricePrefill(direction, base, pair.pricePrecision);
+  if (last === undefined) return anchored;
+  return alertHit({ direction, price: Number(anchored) }, last)
+    ? alertPricePrefill(direction, last, pair.pricePrecision)
+    : anchored;
+}
+
 function AlertFormFor({ pair }: { pair: Pair }) {
   const dispatch = useAppDispatch();
   const ticker = useAppSelector(selectTicker(pair.symbol));
   const lastPrice = ticker?.last;
-  const prefill = lastPrice !== undefined ? lastPrice.toFixed(pair.pricePrecision) : '';
 
   const [direction, setDirection] = useState<AlertDirection>('above');
-  const [price, setPrice] = useState(prefill);
+  const [typedPrice, setTypedPrice] = useState('');
   const [edited, setEdited] = useState(false);
+  // Last price at the moment the prefill was (re)computed; undefined falls back to live.
+  const [anchor, setAnchor] = useState(lastPrice);
 
-  const request: AlertRequest = {
-    symbol: pair.symbol,
-    direction,
-    price: Number(price.trim().replace(',', '.')),
+  const price = edited ? typedPrice : prefillPrice(direction, anchor, lastPrice, pair);
+  const request: AlertRequest = { symbol: pair.symbol, direction, price: parseDecimal(price) };
+  const error = validateAlert(request, pair, lastPrice);
+  // Errors wait for the user's own edit; submit is disabled either way.
+  const shown = error !== null && edited ? error : undefined;
+
+  const restartPrefill = () => {
+    setEdited(false);
+    setAnchor(lastPrice);
   };
-  const error =
-    price.trim() === ''
-      ? 'Enter a price greater than zero'
-      : validateAlert(request, pair, lastPrice);
-  // Format errors wait for the first edit; "already above/below" shows as soon as it applies.
-  const alreadyTrue = error?.startsWith('Price is already') ?? false;
-  const shown = error !== null && (edited || alreadyTrue) ? error : undefined;
+
+  const changeDirection = (value: string) => {
+    setDirection(value === 'below' ? 'below' : 'above');
+    if (!edited) setAnchor(lastPrice);
+  };
 
   const onSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (error) return;
     dispatch(alertRequested(request));
-    setPrice(prefill);
-    setEdited(false);
+    restartPrefill();
   };
 
   return (
@@ -67,7 +90,7 @@ function AlertFormFor({ pair }: { pair: Pair }) {
           aria-label="Direction"
           options={DIRECTIONS}
           value={direction}
-          onChange={(v) => setDirection(v === 'below' ? 'below' : 'above')}
+          onChange={changeDirection}
         />
       </div>
       <div className="w-44">
@@ -78,7 +101,7 @@ function AlertFormFor({ pair }: { pair: Pair }) {
           autoComplete="off"
           value={price}
           onChange={(e) => {
-            setPrice(e.target.value);
+            setTypedPrice(e.target.value);
             setEdited(true);
           }}
           error={shown}

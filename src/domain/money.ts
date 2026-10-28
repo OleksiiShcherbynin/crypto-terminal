@@ -27,6 +27,11 @@ export function floorTo(value: number, dp: number): number {
   return Number(new Big(value).round(dp, Big.roundDown));
 }
 
+/** Rounds away from zero (never down) to `dp` decimal places. */
+export function ceilTo(value: number, dp: number): number {
+  return Number(new Big(value).round(dp, Big.roundUp));
+}
+
 export function isZero(value: number): boolean {
   return Math.abs(value) < 1e-8;
 }

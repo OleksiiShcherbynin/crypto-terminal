@@ -4,13 +4,14 @@ import { orderRequested } from '../../../domain/actions';
 import { formatPrice, formatQuantity, formatUsd } from '../../../domain/format';
 import { div, floorTo, mul } from '../../../domain/money';
 import { findPair } from '../../../domain/pairs';
-import type { OrderRequest, Side, OrderType, Pair } from '../../../domain/types';
+import { parseDecimal } from '../../../domain/parse';
+import type { ConnectionStatus, OrderRequest, Side, OrderType, Pair } from '../../../domain/types';
 import { Button } from '../../../ui/Button';
 import { Input } from '../../../ui/Input';
 import { Segmented } from '../../../ui/Segmented';
 import { selectConnection, selectSelection, selectTicker } from '../../market/selectors';
 import { selectAvailableBase, selectAvailableQuote } from '../../portfolio/selectors';
-import { orderCost, validateOrder, type OrderContext } from '../validation';
+import { limitPricePrefill, orderCost, validateOrder, type OrderContext } from '../validation';
 
 const PERCENTS = [25, 50, 75, 100] as const;
 
@@ -23,10 +24,37 @@ const TYPES = [
   { value: 'limit', label: 'Limit' },
 ];
 
+/** Share of available USDT a market buy may spend, so a small up-tick cannot overdraw it. */
+const MARKET_BUY_BUFFER = 0.999;
+
 function positive(raw: string): number | undefined {
-  const n = Number(raw);
-  return raw.trim() !== '' && Number.isFinite(n) && n > 0 ? n : undefined;
+  const n = parseDecimal(raw);
+  return Number.isFinite(n) && n > 0 ? n : undefined;
 }
+
+/**
+ * The untouched limit price: computed from the price at the last side/type switch, and
+ * recomputed from the live price only if the market has moved through it.
+ */
+function prefillPrice(
+  side: Side,
+  anchor: number | undefined,
+  last: number | undefined,
+  pair: Pair,
+) {
+  const base = anchor ?? last;
+  if (base === undefined) return '';
+  const anchored = limitPricePrefill(side, base, pair.pricePrecision);
+  if (last === undefined) return anchored;
+  const crossed = side === 'buy' ? Number(anchored) >= last : Number(anchored) <= last;
+  return crossed ? limitPricePrefill(side, last, pair.pricePrecision) : anchored;
+}
+
+const STALE_NOTE: Record<Exclude<ConnectionStatus, 'live'>, string> = {
+  connecting: 'Last known price — feed reconnecting',
+  reconnecting: 'Last known price — feed reconnecting',
+  offline: 'Last known price — feed offline',
+};
 
 export function TradeForm() {
   const { symbol } = useAppSelector(selectSelection);
@@ -44,17 +72,38 @@ function TradeFormFor({ pair }: { pair: Pair }) {
 
   const [side, setSide] = useState<Side>('buy');
   const [type, setType] = useState<OrderType>('market');
-  const [quantity, setQuantity] = useState('');
-  const [price, setPrice] = useState('');
+  const [typedQuantity, setTypedQuantity] = useState('');
+  // A percent button stays selected until the user types a quantity by hand; meanwhile the
+  // quantity follows the current price, so a 100 % buy stays affordable after the next tick.
+  const [percent, setPercent] = useState<number | null>(null);
   const [quantityEdited, setQuantityEdited] = useState(false);
+  const [typedPrice, setTypedPrice] = useState('');
+  const [priceEdited, setPriceEdited] = useState(false);
+  // Last price at the moment the limit prefill was (re)computed; undefined falls back to live.
+  const [priceAnchor, setPriceAnchor] = useState<number | undefined>(undefined);
 
   const lastPrice = ticker?.last;
+  const price = priceEdited ? typedPrice : prefillPrice(side, priceAnchor, lastPrice, pair);
+  const limitPrice = type === 'limit' ? positive(price) : undefined;
+  const refPrice = limitPrice ?? lastPrice;
+
+  const percentQuantity = (pct: number): number | undefined => {
+    if (side === 'sell') return floorTo(mul(availableBase, pct / 100), pair.qtyPrecision);
+    if (refPrice === undefined) return undefined;
+    const budget = mul(availableQuote, pct / 100);
+    const spend = type === 'market' ? mul(budget, MARKET_BUY_BUFFER) : budget;
+    return floorTo(div(spend, refPrice), pair.qtyPrecision);
+  };
+  const fromPercent = percent !== null ? percentQuantity(percent) : undefined;
+  const quantity =
+    percent !== null ? (fromPercent !== undefined ? String(fromPercent) : '') : typedQuantity;
+
   const request: OrderRequest = {
     symbol: pair.symbol,
     side,
     type,
-    quantity: Number(quantity),
-    price: type === 'limit' ? Number(price) : undefined,
+    quantity: parseDecimal(quantity),
+    price: type === 'limit' ? parseDecimal(price) : undefined,
   };
   const ctx: OrderContext = {
     pair,
@@ -65,38 +114,35 @@ function TradeFormFor({ pair }: { pair: Pair }) {
   };
   const error = validateOrder(request, ctx);
 
-  const limitPrice = type === 'limit' ? positive(price) : undefined;
-  const refPrice = limitPrice ?? lastPrice;
   const qty = positive(quantity);
   const cost =
     qty !== undefined && refPrice !== undefined ? orderCost(request, refPrice) : undefined;
 
   const clearQuantity = () => {
-    setQuantity('');
+    setTypedQuantity('');
+    setPercent(null);
     setQuantityEdited(false);
   };
 
   const changeSide = (value: string) => {
     setSide(value === 'sell' ? 'sell' : 'buy');
     clearQuantity();
+    // An untouched limit price moves to the valid side of the current price.
+    if (!priceEdited) setPriceAnchor(lastPrice);
   };
 
   const changeType = (value: string) => {
     const next: OrderType = value === 'limit' ? 'limit' : 'market';
     setType(next);
-    if (next === 'limit' && lastPrice !== undefined)
-      setPrice(lastPrice.toFixed(pair.pricePrecision));
+    if (next === 'limit') {
+      setPriceEdited(false);
+      setPriceAnchor(lastPrice);
+    }
   };
 
   const applyPercent = (pct: number) => {
-    let amount: number;
-    if (side === 'sell') {
-      amount = floorTo(mul(availableBase, pct / 100), pair.qtyPrecision);
-    } else {
-      if (refPrice === undefined) return;
-      amount = floorTo(div(mul(availableQuote, pct / 100), refPrice), pair.qtyPrecision);
-    }
-    setQuantity(String(amount));
+    if (side === 'buy' && refPrice === undefined) return;
+    setPercent(pct);
     setQuantityEdited(true);
   };
 
@@ -111,9 +157,13 @@ function TradeFormFor({ pair }: { pair: Pair }) {
     error?.field === 'funds' || (error?.field === 'quantity' && quantityEdited)
       ? error.message
       : undefined;
-  const priceError = error?.field === 'price' && type === 'limit' ? error.message : undefined;
-  const noPriceError = error?.field === 'price' && type === 'market' ? error.message : undefined;
-  const stale = status !== 'live';
+  const noPrice = error?.field === 'price' && lastPrice === undefined;
+  // Price errors (format, wrong side) wait for the user's own edit; submit is disabled either way.
+  const priceError =
+    error?.field === 'price' && type === 'limit' && !noPrice && priceEdited
+      ? error.message
+      : undefined;
+  const staleNote = lastPrice !== undefined && status !== 'live' ? STALE_NOTE[status] : undefined;
 
   return (
     <form onSubmit={onSubmit} className="flex flex-col gap-3 p-3 text-sm" noValidate>
@@ -128,7 +178,7 @@ function TradeFormFor({ pair }: { pair: Pair }) {
           {lastPrice !== undefined ? formatPrice(lastPrice, pair.pricePrecision) : '—'}
         </span>
       </div>
-      {stale ? <p className="-mt-2 text-xs text-muted">Price is stale while offline</p> : null}
+      {staleNote ? <p className="-mt-2 text-xs text-muted">{staleNote}</p> : null}
 
       {type === 'limit' ? (
         <Input
@@ -137,7 +187,10 @@ function TradeFormFor({ pair }: { pair: Pair }) {
           inputMode="decimal"
           autoComplete="off"
           value={price}
-          onChange={(e) => setPrice(e.target.value)}
+          onChange={(e) => {
+            setTypedPrice(e.target.value);
+            setPriceEdited(true);
+          }}
           error={priceError}
         />
       ) : null}
@@ -150,7 +203,8 @@ function TradeFormFor({ pair }: { pair: Pair }) {
         placeholder="0"
         value={quantity}
         onChange={(e) => {
-          setQuantity(e.target.value);
+          setTypedQuantity(e.target.value);
+          setPercent(null);
           setQuantityEdited(true);
         }}
         error={quantityError}
@@ -181,7 +235,7 @@ function TradeFormFor({ pair }: { pair: Pair }) {
         </div>
       </dl>
 
-      {error?.field === 'connection' || noPriceError ? (
+      {error?.field === 'connection' || noPrice ? (
         <p role="alert" className="text-xs text-down">
           {error?.message}
         </p>

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { add, sub, mul, div, roundTo, floorTo, isZero } from './money';
+import { add, sub, mul, div, roundTo, floorTo, ceilTo, isZero } from './money';
 
 describe('money', () => {
   it('adds without float drift', () => expect(add(0.1, 0.2)).toBe(0.3));
@@ -11,5 +11,10 @@ describe('money', () => {
   it('floors toward zero instead of rounding up', () => {
     expect(floorTo(0.123459, 5)).toBe(0.12345);
     expect(floorTo(0.99999, 2)).toBe(0.99);
+  });
+  it('ceils away from zero instead of rounding down', () => {
+    expect(ceilTo(0.123451, 5)).toBe(0.12346);
+    expect(ceilTo(0.99001, 2)).toBe(1);
+    expect(ceilTo(1.5, 2)).toBe(1.5);
   });
 });
