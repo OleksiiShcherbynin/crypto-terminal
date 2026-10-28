@@ -7,15 +7,16 @@ import { MarketList } from './features/market/components/MarketList';
 import { PositionsTable } from './features/portfolio/components/PositionsTable';
 import { TradeHistory } from './features/portfolio/components/TradeHistory';
 import { OpenOrdersTable } from './features/orders/components/OpenOrdersTable';
+import { ExternalChangeBanner } from './app/components/ExternalChangeBanner';
+import { EquityHeader } from './features/portfolio/components/EquityHeader';
+import { ToastStack } from './features/notifications/components/ToastStack';
 import { Panel } from './ui/Panel';
 
 function App() {
   return (
     <div className="flex min-h-full flex-col xl:h-full">
-      <header className="flex h-9 shrink-0 items-center border-b border-line bg-panel px-3">
-        <h1 className="text-sm font-semibold tracking-tight">Crypto Terminal</h1>
-        <span className="ml-3 text-xs text-muted">Paper trading</span>
-      </header>
+      <EquityHeader />
+      <ExternalChangeBanner />
       <main className="grid min-h-0 flex-1 grid-cols-1 xl:grid-cols-[280px_1fr_320px] xl:grid-rows-[1fr_240px]">
         <section
           aria-label="Market"
@@ -46,6 +47,7 @@ function App() {
           status={<ConnectionStatus />}
         />
       </main>
+      <ToastStack />
     </div>
   );
 }

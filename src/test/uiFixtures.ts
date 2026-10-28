@@ -79,3 +79,17 @@ export function spyOnDispatch(
   view.rerender(createElement(Provider, { store: view.store, children: ui }));
   return spy;
 }
+
+/** Equity 10,120.00 (9,000 cash + 1 BTC at 1,120), realized +20, one open order, one alert. */
+export function equityState(): Partial<RootState> {
+  return {
+    tickers: { BTCUSDT: t('BTCUSDT', 1_120) },
+    portfolio: {
+      quoteBalance: 9_000,
+      reservedQuote: 0,
+      realizedPnl: 20,
+      trades: [],
+      positions: { BTC: { asset: 'BTC', quantity: 1, avgPrice: 100, reservedQuantity: 0 } },
+    },
+  };
+}
