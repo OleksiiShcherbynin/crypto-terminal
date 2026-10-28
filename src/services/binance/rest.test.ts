@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from 'vitest';
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { fetchKlines } from './rest';
 
 const rows = [[1700000000000, '1', '2', '0.5', '1.5', '10', 0]];
@@ -81,6 +81,46 @@ describe('fetchKlines', () => {
       controller.abort();
       await expect(pending).rejects.toMatchObject({ name: 'AbortError' });
       expect(fetchImpl).toHaveBeenCalledTimes(1);
+    });
+
+    describe('without native AbortSignal.timeout / AbortSignal.any', () => {
+      const native = { timeout: AbortSignal.timeout, any: AbortSignal.any };
+      beforeEach(() => {
+        Reflect.set(AbortSignal, 'timeout', undefined);
+        Reflect.set(AbortSignal, 'any', undefined);
+      });
+      afterEach(() => {
+        Reflect.set(AbortSignal, 'timeout', native.timeout);
+        Reflect.set(AbortSignal, 'any', native.any);
+        vi.restoreAllMocks();
+      });
+
+      it('still falls back when a host hangs past the timeout', async () => {
+        const fetchImpl = vi
+          .fn<typeof fetch>()
+          .mockImplementationOnce((url, init) => hanging(String(url), init))
+          .mockResolvedValueOnce(ok());
+        expect(
+          await fetchKlines('BTCUSDT', '1m', 1, { fetchImpl, hosts: ['a', 'b'], timeoutMs: 20 }),
+        ).toEqual(expected);
+      });
+
+      it('clears its timer and caller listener after every host', async () => {
+        const controller = new AbortController();
+        const clear = vi.spyOn(globalThis, 'clearTimeout');
+        const remove = vi.spyOn(controller.signal, 'removeEventListener');
+        const fetchImpl = vi
+          .fn<typeof fetch>()
+          .mockRejectedValueOnce(new Error('net'))
+          .mockResolvedValueOnce(ok());
+        await fetchKlines('BTCUSDT', '1m', 1, {
+          fetchImpl,
+          hosts: ['a', 'b'],
+          signal: controller.signal,
+        });
+        expect(clear).toHaveBeenCalledTimes(2);
+        expect(remove).toHaveBeenCalledTimes(2);
+      });
     });
 
     it('does not start a request when the caller already aborted', async () => {

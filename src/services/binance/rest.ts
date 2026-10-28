@@ -22,25 +22,40 @@ function abortError(signal: AbortSignal): unknown {
   return signal.reason ?? new DOMException('The operation was aborted.', 'AbortError');
 }
 
-function timeoutSignal(ms: number): AbortSignal {
-  if (typeof AbortSignal.timeout === 'function') return AbortSignal.timeout(ms);
+/** A signal plus a cleanup for the fallback paths, which own a timer or listeners. */
+interface ScopedSignal {
+  signal: AbortSignal;
+  dispose: () => void;
+}
+
+const noop = () => {};
+
+function timeoutSignal(ms: number): ScopedSignal {
+  if (typeof AbortSignal.timeout === 'function') {
+    return { signal: AbortSignal.timeout(ms), dispose: noop };
+  }
   const controller = new AbortController();
-  setTimeout(() => controller.abort(new DOMException('Timed out', 'TimeoutError')), ms);
-  return controller.signal;
+  const id = setTimeout(() => controller.abort(new DOMException('Timed out', 'TimeoutError')), ms);
+  return { signal: controller.signal, dispose: () => clearTimeout(id) };
 }
 
 /** Aborts as soon as any input aborts (AbortSignal.any where available). */
-function anySignal(signals: AbortSignal[]): AbortSignal {
-  if (typeof AbortSignal.any === 'function') return AbortSignal.any(signals);
+function anySignal(signals: AbortSignal[]): ScopedSignal {
+  if (typeof AbortSignal.any === 'function') {
+    return { signal: AbortSignal.any(signals), dispose: noop };
+  }
   const controller = new AbortController();
+  const cleanups: Array<() => void> = [];
   for (const signal of signals) {
     if (signal.aborted) {
       controller.abort(signal.reason);
       break;
     }
-    signal.addEventListener('abort', () => controller.abort(signal.reason), { once: true });
+    const onAbort = () => controller.abort(signal.reason);
+    signal.addEventListener('abort', onAbort, { once: true });
+    cleanups.push(() => signal.removeEventListener('abort', onAbort));
   }
-  return controller.signal;
+  return { signal: controller.signal, dispose: () => cleanups.forEach((f) => f()) };
 }
 
 export interface FetchKlinesDeps {
@@ -68,10 +83,11 @@ export async function fetchKlines(
   for (const host of hosts) {
     if (signal?.aborted) throw abortError(signal);
     const timeout = timeoutSignal(timeoutMs);
+    const combined = signal ? anySignal([signal, timeout.signal]) : timeout;
     try {
       const res = await fetchImpl(
         `https://${host}/api/v3/klines?symbol=${symbol}&interval=${interval}&limit=${limit}`,
-        { signal: signal ? anySignal([signal, timeout]) : timeout },
+        { signal: combined.signal },
       );
       if (!res.ok) continue;
       const body: unknown = await res.json();
@@ -80,6 +96,9 @@ export async function fetchKlines(
     } catch {
       if (signal?.aborted) throw abortError(signal);
       // otherwise: try next host
+    } finally {
+      combined.dispose();
+      timeout.dispose();
     }
   }
   throw new Error('klines unavailable');

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useAppDispatch, useAppSelector } from '../../../app/hooks';
 import { findPair } from '../../../domain/pairs';
 import { parseDecimal } from '../../../domain/parse';
@@ -23,22 +23,24 @@ export function AlertForm() {
 }
 
 /**
- * The untouched alert price: computed from the price at the last direction switch, and
- * recomputed from the live price only once the market has reached it.
+ * The untouched alert price, computed from an anchor price. `reanchor` says the anchor should
+ * move to the live price: there was none yet, or the market reached the prefill. Moving the
+ * anchor once (instead of following every tick) keeps the field still afterwards.
  */
 function prefillPrice(
   direction: AlertDirection,
   anchor: number | undefined,
   last: number | undefined,
   pair: Pair,
-): string {
+): { price: string; reanchor: boolean } {
   const base = anchor ?? last;
-  if (base === undefined) return '';
+  if (base === undefined) return { price: '', reanchor: false };
   const anchored = alertPricePrefill(direction, base, pair.pricePrecision);
-  if (last === undefined) return anchored;
-  return alertHit({ direction, price: Number(anchored) }, last)
-    ? alertPricePrefill(direction, last, pair.pricePrecision)
-    : anchored;
+  if (last === undefined) return { price: anchored, reanchor: false };
+  if (alertHit({ direction, price: Number(anchored) }, last)) {
+    return { price: alertPricePrefill(direction, last, pair.pricePrecision), reanchor: true };
+  }
+  return { price: anchored, reanchor: anchor === undefined };
 }
 
 function AlertFormFor({ pair }: { pair: Pair }) {
@@ -49,10 +51,16 @@ function AlertFormFor({ pair }: { pair: Pair }) {
   const [direction, setDirection] = useState<AlertDirection>('above');
   const [typedPrice, setTypedPrice] = useState('');
   const [edited, setEdited] = useState(false);
-  // Last price at the moment the prefill was (re)computed; undefined falls back to live.
+  // Price the prefill is computed from; set on direction switches and re-anchored once when the
+  // market reaches the prefill.
   const [anchor, setAnchor] = useState(lastPrice);
 
-  const price = edited ? typedPrice : prefillPrice(direction, anchor, lastPrice, pair);
+  const prefill = prefillPrice(direction, anchor, lastPrice, pair);
+  const price = edited ? typedPrice : prefill.price;
+  const reanchor = !edited && prefill.reanchor;
+  useEffect(() => {
+    if (reanchor && lastPrice !== undefined) setAnchor(lastPrice);
+  }, [reanchor, lastPrice]);
   const request: AlertRequest = { symbol: pair.symbol, direction, price: parseDecimal(price) };
   const error = validateAlert(request, pair, lastPrice);
   // Errors wait for the user's own edit; submit is disabled either way.

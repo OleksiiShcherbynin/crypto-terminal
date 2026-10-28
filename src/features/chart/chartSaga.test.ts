@@ -8,11 +8,11 @@ import { c, fakeDeps } from '../../test/fixtures';
 import { connectionStatusChanged } from '../market/connectionSlice';
 import { intervalChanged, pairSelected } from '../market/selectionSlice';
 import { candlesLoaded, candlesLoading, candlesUnavailable } from './candlesSlice';
-import { HISTORY_LIMIT, SWITCH_DEBOUNCE_MS, chartSaga } from './chartSaga';
+import { HISTORY_LIMIT, MIN_SWITCH_GAP_MS, SWITCH_DEBOUNCE_MS, chartSaga } from './chartSaga';
 
 const initial = () => rootReducer(undefined, { type: '@@init' });
 // Pair/interval switches are debounced; most tests only need the debounce to be short.
-const FAST = { switchDebounceMs: 1 };
+const FAST = { switchDebounceMs: 1, minSwitchGapMs: 0 };
 const withSignal = expect.objectContaining({ signal: expect.any(AbortSignal) });
 
 describe('chartSaga', () => {
@@ -55,13 +55,13 @@ describe('chartSaga', () => {
         : Promise.resolve([c(2)]),
     );
     // The stale ETH request settles after the BTC load has finished.
-    setTimeout(() => resolveEth([c(9)]), 25);
+    setTimeout(() => resolveEth([c(9)]), 80);
     const result = await expectSaga(chartSaga, deps, FAST)
       .withReducer(rootReducer, initial())
       .dispatch(pairSelected('ETHUSDT'))
-      .delay(10)
+      .delay(20)
       .dispatch(pairSelected('BTCUSDT'))
-      .silentRun(60);
+      .silentRun(250);
     expect(deps.fetchKlines).toHaveBeenCalledTimes(2);
     const loaded = result.allEffects
       .filter((e): e is PutEffect => e.type === 'PUT')
@@ -99,6 +99,32 @@ describe('chartSaga', () => {
     expect(loading).toEqual(['ETHUSDT', 'ETHUSDT', 'SOLUSDT']);
   });
 
+  it('spaces socket switches so control messages stay under the Binance limit', async () => {
+    const deps = fakeDeps();
+    deps.client.subscribe(['btcusdt@kline_1m']);
+    const sentAt: number[] = [];
+    const original = deps.client.unsubscribe.bind(deps.client);
+    vi.spyOn(deps.client, 'unsubscribe').mockImplementation((streams) => {
+      sentAt.push(Date.now());
+      original(streams);
+    });
+    await expectSaga(chartSaga, deps, { switchDebounceMs: 1, minSwitchGapMs: 200 })
+      .withReducer(rootReducer, initial())
+      .dispatch(pairSelected('ETHUSDT'))
+      .delay(30)
+      .dispatch(pairSelected('SOLUSDT'))
+      .silentRun(400);
+    expect(sentAt).toHaveLength(2);
+    expect(sentAt[1] - sentAt[0]).toBeGreaterThanOrEqual(195);
+    expect(deps.client.streams.has('solusdt@kline_1m')).toBe(true);
+    expect(deps.client.streams.has('ethusdt@kline_1m')).toBe(false);
+  });
+
+  it('keeps the default switch gap wide enough for two switches per second at most', () => {
+    // Each switch sends UNSUBSCRIBE + SUBSCRIBE; > 500 ms apart means ≤ 4 messages in any second.
+    expect(MIN_SWITCH_GAP_MS).toBeGreaterThan(500);
+  });
+
   it('aborts the request of a superseded load', async () => {
     const deps = fakeDeps();
     const signals: Record<string, AbortSignal | undefined> = {};
@@ -109,9 +135,9 @@ describe('chartSaga', () => {
     await expectSaga(chartSaga, deps, FAST)
       .withReducer(rootReducer, initial())
       .dispatch(pairSelected('ETHUSDT'))
-      .delay(10)
+      .delay(20)
       .dispatch(pairSelected('BTCUSDT'))
-      .silentRun(60);
+      .silentRun(200);
     expect(signals.ETHUSDT?.aborted).toBe(true);
     expect(signals.BTCUSDT?.aborted).toBe(false);
   });

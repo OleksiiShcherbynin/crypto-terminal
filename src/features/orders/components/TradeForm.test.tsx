@@ -123,6 +123,22 @@ it('an untouched limit price follows the market once the market moves through it
   expect(screen.getByLabelText('Price')).toHaveValue('98.50');
 });
 
+it('a re-anchored limit price holds still when the market drifts back', async () => {
+  const { store } = renderWithStore(<TradeForm />, { preloadedState: tradeState() });
+  await userEvent.click(screen.getByRole('button', { name: 'Limit' }));
+  act(() => {
+    store.dispatch(tickersUpdated([t('BTCUSDT', 99)]));
+  });
+  expect(screen.getByLabelText('Price')).toHaveValue('98.50');
+  // Back above the old 99.50 prefill: the field must not jump back and forth with the market.
+  for (const last of [99.7, 99.2, 99.8]) {
+    act(() => {
+      store.dispatch(tickersUpdated([t('BTCUSDT', last)]));
+    });
+    expect(screen.getByLabelText('Price')).toHaveValue('98.50');
+  }
+});
+
 it('moves the untouched limit prefill to the other side when the side changes', async () => {
   renderWithStore(<TradeForm />, { preloadedState: tradeState() });
   await userEvent.click(screen.getByRole('button', { name: 'Limit' }));

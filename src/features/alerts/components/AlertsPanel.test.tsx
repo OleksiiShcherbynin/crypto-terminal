@@ -32,6 +32,36 @@ it('an untouched prefill follows the market once the market reaches it', () => {
   expect(addButton()).toBeEnabled();
 });
 
+it('a re-anchored prefill holds still when the market drifts back', () => {
+  const { store } = renderWithStore(<AlertsPanel />, { preloadedState: tradeState() });
+  act(() => {
+    store.dispatch(tickersUpdated([t('BTCUSDT', 102)]));
+  });
+  expect(priceInput()).toHaveValue('103.02');
+  for (const last of [100.5, 101.5, 100.2]) {
+    act(() => {
+      store.dispatch(tickersUpdated([t('BTCUSDT', last)]));
+    });
+    expect(priceInput()).toHaveValue('103.02');
+  }
+});
+
+it('anchors the prefill on the first price when the form opened before any tick', () => {
+  const state = tradeState();
+  const { store } = renderWithStore(<AlertsPanel />, {
+    preloadedState: { ...state, tickers: {} },
+  });
+  expect(priceInput()).toHaveValue('');
+  act(() => {
+    store.dispatch(tickersUpdated([t('BTCUSDT', 100)]));
+  });
+  expect(priceInput()).toHaveValue('101.00');
+  act(() => {
+    store.dispatch(tickersUpdated([t('BTCUSDT', 100.4)]));
+  });
+  expect(priceInput()).toHaveValue('101.00');
+});
+
 it('switching direction moves the untouched prefill to the other side', async () => {
   renderWithStore(<AlertsPanel />, { preloadedState: tradeState() });
   await userEvent.click(screen.getByRole('button', { name: 'Below' }));

@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useAppDispatch, useAppSelector } from '../../../app/hooks';
 import { orderRequested } from '../../../domain/actions';
 import { formatPrice, formatQuantity, formatUsd } from '../../../domain/format';
@@ -33,21 +33,23 @@ function positive(raw: string): number | undefined {
 }
 
 /**
- * The untouched limit price: computed from the price at the last side/type switch, and
- * recomputed from the live price only if the market has moved through it.
+ * The untouched limit price, computed from an anchor price. `reanchor` says the anchor should
+ * move to the live price: there was none yet, or the market moved through the prefill. Moving
+ * the anchor once (instead of following every tick) keeps the field still afterwards.
  */
 function prefillPrice(
   side: Side,
   anchor: number | undefined,
   last: number | undefined,
   pair: Pair,
-) {
+): { price: string; reanchor: boolean } {
   const base = anchor ?? last;
-  if (base === undefined) return '';
+  if (base === undefined) return { price: '', reanchor: false };
   const anchored = limitPricePrefill(side, base, pair.pricePrecision);
-  if (last === undefined) return anchored;
+  if (last === undefined) return { price: anchored, reanchor: false };
   const crossed = side === 'buy' ? Number(anchored) >= last : Number(anchored) <= last;
-  return crossed ? limitPricePrefill(side, last, pair.pricePrecision) : anchored;
+  if (crossed) return { price: limitPricePrefill(side, last, pair.pricePrecision), reanchor: true };
+  return { price: anchored, reanchor: anchor === undefined };
 }
 
 const STALE_NOTE: Record<Exclude<ConnectionStatus, 'live'>, string> = {
@@ -79,11 +81,17 @@ function TradeFormFor({ pair }: { pair: Pair }) {
   const [quantityEdited, setQuantityEdited] = useState(false);
   const [typedPrice, setTypedPrice] = useState('');
   const [priceEdited, setPriceEdited] = useState(false);
-  // Last price at the moment the limit prefill was (re)computed; undefined falls back to live.
+  // Price the limit prefill is computed from; set on side/type switches and re-anchored once when
+  // the market moves through the prefill.
   const [priceAnchor, setPriceAnchor] = useState<number | undefined>(undefined);
 
   const lastPrice = ticker?.last;
-  const price = priceEdited ? typedPrice : prefillPrice(side, priceAnchor, lastPrice, pair);
+  const prefill = prefillPrice(side, priceAnchor, lastPrice, pair);
+  const price = priceEdited ? typedPrice : prefill.price;
+  const reanchor = type === 'limit' && !priceEdited && prefill.reanchor;
+  useEffect(() => {
+    if (reanchor && lastPrice !== undefined) setPriceAnchor(lastPrice);
+  }, [reanchor, lastPrice]);
   const limitPrice = type === 'limit' ? positive(price) : undefined;
   const refPrice = limitPrice ?? lastPrice;
 

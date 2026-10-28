@@ -16,12 +16,22 @@ export const HISTORY_LIMIT = 300;
  * UNSUBSCRIBE and a SUBSCRIBE, and Binance drops connections above 5 control messages/second.
  */
 export const SWITCH_DEBOUNCE_MS = 350;
+/**
+ * Minimum time between two socket switches. A switch sends at most two control messages, so
+ * keeping switches more than 500 ms apart caps them at four per second, one under the limit.
+ */
+export const MIN_SWITCH_GAP_MS = 520;
 
 const selectCandles = (s: RootState) => s.candles;
 
 type ChartDeps = Pick<SagaDeps, 'client' | 'fetchKlines'>;
 export interface ChartOptions {
   switchDebounceMs: number;
+  minSwitchGapMs: number;
+}
+/** When the socket subscriptions last changed; shared by all loads of one chartSaga. */
+interface SwitchGate {
+  lastSwitchAt: number;
 }
 
 /** Anything that changes which candles should be on screen, or that may have left a gap. */
@@ -40,6 +50,7 @@ export const chartTriggers = (a: Action): boolean =>
 export function* loadChart(
   { client, fetchKlines }: ChartDeps,
   opts: ChartOptions,
+  gate: SwitchGate,
   trigger: Action,
 ): SagaIterator {
   const { symbol, interval }: ReturnType<typeof selectSelection> = yield select(selectSelection);
@@ -57,8 +68,14 @@ export function* loadChart(
 
   const stream = klineStream(symbol, interval);
   const stale = [...client.streams].filter((s) => isKlineStream(s) && s !== stream);
-  if (stale.length > 0) yield call([client, client.unsubscribe], stale);
-  yield call([client, client.subscribe], [stream]);
+  if (stale.length > 0 || !client.streams.has(stream)) {
+    // Hard rate limit on top of the debounce: takeLatest may still restart this wait.
+    const wait = gate.lastSwitchAt + opts.minSwitchGapMs - Date.now();
+    if (wait > 0) yield delay(wait);
+    gate.lastSwitchAt = Date.now();
+    if (stale.length > 0) yield call([client, client.unsubscribe], stale);
+    yield call([client, client.subscribe], [stream]);
+  }
   const controller = new AbortController();
   try {
     const candles: Candle[] = yield call(fetchKlines, symbol, interval, HISTORY_LIMIT, {
@@ -74,6 +91,11 @@ export function* loadChart(
 }
 
 export function* chartSaga(deps: ChartDeps, opts: Partial<ChartOptions> = {}): SagaIterator {
-  const options: ChartOptions = { switchDebounceMs: SWITCH_DEBOUNCE_MS, ...opts };
-  yield takeLatest(chartTriggers, loadChart, deps, options);
+  const options: ChartOptions = {
+    switchDebounceMs: SWITCH_DEBOUNCE_MS,
+    minSwitchGapMs: MIN_SWITCH_GAP_MS,
+    ...opts,
+  };
+  const gate: SwitchGate = { lastSwitchAt: Number.NEGATIVE_INFINITY };
+  yield takeLatest(chartTriggers, loadChart, deps, options, gate);
 }
