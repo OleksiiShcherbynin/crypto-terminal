@@ -1,4 +1,6 @@
 import { BottomPanel } from './app/components/BottomPanel';
+import { ConnectionStatus } from './features/market/components/ConnectionStatus';
+import { MarketList } from './features/market/components/MarketList';
 import { Panel } from './ui/Panel';
 
 function Placeholder({ children }: { children: string }) {
@@ -18,7 +20,7 @@ function App() {
           className="border-b border-line bg-panel xl:border-r xl:border-b-0"
         >
           <Panel title="Market">
-            <Placeholder>Pair list loads here</Placeholder>
+            <MarketList />
           </Panel>
         </section>
         <section aria-label="Chart" className="min-h-72 border-b border-line bg-bg xl:border-b-0">
@@ -34,7 +36,7 @@ function App() {
             <Placeholder>Order form loads here</Placeholder>
           </Panel>
         </section>
-        <BottomPanel />
+        <BottomPanel status={<ConnectionStatus />} />
       </main>
     </div>
   );
