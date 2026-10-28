@@ -83,6 +83,17 @@ describe('marketStreamSaga', () => {
     expect(deps.client.openedHosts.length).toBeGreaterThanOrEqual(2);
   });
 
+  it('shows reconnecting as soon as the connection drops, before the backoff elapses', async () => {
+    const deps = fakeDeps();
+    later(10, () => deps.client.emit({ type: 'open' }));
+    later(20, () => deps.client.emit({ type: 'close', code: 1006 }));
+    await expectSaga(marketStreamSaga, deps, { ...STEADY, backoff: () => 1000 })
+      .put(connectionStatusChanged({ status: 'reconnecting', attempt: 1 }))
+      .silentRun(100);
+    // Still waiting out the 1 s backoff: no second open yet.
+    expect(deps.client.openedHosts).toHaveLength(1);
+  });
+
   it('reaches offline after five failed attempts', async () => {
     const deps = fakeDeps();
     const open = deps.client.open;

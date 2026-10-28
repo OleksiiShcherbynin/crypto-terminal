@@ -116,8 +116,8 @@ export function* marketStreamSaga(
       WATCHED_PAIRS.map((p) => miniTickerStream(p.symbol)),
     );
     let attempt = 0;
+    yield put(connectionStatus(attempt));
     while (true) {
-      yield put(connectionStatus(attempt));
       yield call([client, client.open], pickHost(wsHosts, attempt));
       const { outcome, opened }: StreamOutcome = yield call(consumeStream, channel, options);
       if (outcome === 'stopped') {
@@ -130,6 +130,8 @@ export function* marketStreamSaga(
       // A connection that worked and then dropped starts again from attempt 1.
       if (opened) attempt = 0;
       attempt += 1;
+      // Report the loss right away, not after the backoff: a dead socket must never look live.
+      yield put(connectionStatus(attempt));
       yield delay(options.backoff(attempt));
     }
   } finally {
