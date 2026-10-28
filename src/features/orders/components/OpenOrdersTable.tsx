@@ -1,5 +1,5 @@
 import { useAppDispatch, useAppSelector } from '../../../app/hooks';
-import { orderCancelled } from '../../../domain/actions';
+import { orderCancelRequested } from '../../../domain/actions';
 import { formatPrice, formatQuantity, formatTime } from '../../../domain/format';
 import { findPair } from '../../../domain/pairs';
 import { Button } from '../../../ui/Button';
@@ -57,7 +57,7 @@ export function OpenOrdersTable() {
                   variant="ghost"
                   size="sm"
                   aria-label={`Cancel ${o.side} order ${label}`}
-                  onClick={() => dispatch(orderCancelled(o))}
+                  onClick={() => dispatch(orderCancelRequested(o.id))}
                 >
                   Cancel
                 </Button>

@@ -2,12 +2,12 @@ import { screen } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { it, expect } from 'vitest';
 import { OpenOrdersTable } from './OpenOrdersTable';
-import { orderCancelled } from '../../../domain/actions';
+import { orderCancelRequested } from '../../../domain/actions';
 import { renderWithStore } from '../../../test/renderWithStore';
 import { spyOnDispatch } from '../../../test/uiFixtures';
 import { order } from '../../../test/fixtures';
 
-it('cancel button dispatches orderCancelled with the order', async () => {
+it('cancel button dispatches orderCancelRequested with the order id', async () => {
   const o = order({ price: 90 });
   const view = renderWithStore(<OpenOrdersTable />, {
     preloadedState: { orders: { items: [o] } },
@@ -15,7 +15,7 @@ it('cancel button dispatches orderCancelled with the order', async () => {
   const spy = spyOnDispatch(view, <OpenOrdersTable />);
   expect(screen.getByText('90.00')).toBeInTheDocument();
   await userEvent.click(screen.getByRole('button', { name: /Cancel/ }));
-  expect(spy).toHaveBeenCalledWith(orderCancelled(o));
+  expect(spy).toHaveBeenCalledWith(orderCancelRequested(o.id));
 });
 
 it('shows an empty state', () => {
