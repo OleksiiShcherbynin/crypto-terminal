@@ -1,7 +1,7 @@
 import type { Action } from '@reduxjs/toolkit';
 import type { SagaIterator } from 'redux-saga';
 import { call, cancelled, put, select, takeLatest } from 'redux-saga/effects';
-import type { SagaDeps } from '../../app/store';
+import type { RootState, SagaDeps } from '../../app/store';
 import { appStarted } from '../../domain/actions';
 import { isKlineStream, klineStream } from '../../domain/pairs';
 import type { Candle } from '../../domain/types';
@@ -11,6 +11,8 @@ import { selectSelection } from '../market/selectors';
 import { candlesLoaded, candlesLoading, candlesUnavailable } from './candlesSlice';
 
 export const HISTORY_LIMIT = 300;
+
+const selectCandles = (s: RootState) => s.candles;
 
 type ChartDeps = Pick<SagaDeps, 'client' | 'fetchKlines'>;
 
@@ -31,12 +33,19 @@ export function* loadChart({ client, fetchKlines }: ChartDeps): SagaIterator {
   const stale = [...client.streams].filter((s) => isKlineStream(s) && s !== stream);
   if (stale.length > 0) yield call([client, client.unsubscribe], stale);
   yield call([client, client.subscribe], [stream]);
-  yield put(candlesLoading({ symbol, interval }));
+  const current: ReturnType<typeof selectCandles> = yield select(selectCandles);
+  // Same pair and interval already on screen (e.g. after a reconnect): refresh silently so the
+  // chart keeps its candles instead of blanking; a failed refresh leaves the state untouched.
+  const silent =
+    current.symbol === symbol &&
+    current.interval === interval &&
+    (current.status === 'ready' || current.status === 'unavailable');
+  if (!silent) yield put(candlesLoading({ symbol, interval }));
   try {
     const candles: Candle[] = yield call(fetchKlines, symbol, interval, HISTORY_LIMIT);
     yield put(candlesLoaded({ symbol, interval, candles }));
   } catch {
-    yield put(candlesUnavailable({ symbol, interval }));
+    if (!silent) yield put(candlesUnavailable({ symbol, interval }));
   } finally {
     if (yield cancelled()) {
       // Superseded by a newer trigger: that run owns the streams and the candles state.
